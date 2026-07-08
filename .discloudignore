@@ -1,5 +1,4 @@
 node_modules/
-dist/
 .env
 *.db
 *.db-journal
@@ -8,3 +7,13 @@ dist/
 tsconfig.json
 .git/
 .gitignore
+src/
+prisma/
+PLANO-IMPLEMENTACAO.md
+README.md
+start.bat
+stop.bat
+status.bat
+start.sh
+package-lock.json
+dist/database/sqlite.js
