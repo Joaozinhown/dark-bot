@@ -22,7 +22,6 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMembers,
   ],
 }) as Client & ClientCommands;
 
@@ -57,6 +56,24 @@ function loadEvents() {
     }
     console.log(`[Events] Carregado: ${event.name}`);
   }
+}
+
+async function waitForClientReady(timeoutMs = 30000): Promise<void> {
+  if (client.isReady()) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      client.off(Events.ClientReady, onReady);
+      reject(new Error(`Timeout aguardando ClientReady apos ${timeoutMs}ms. Verifique token, invite do bot e intents no Discord Developer Portal.`));
+    }, timeoutMs);
+
+    function onReady() {
+      clearTimeout(timeout);
+      resolve();
+    }
+
+    client.once(Events.ClientReady, onReady);
+  });
 }
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -116,8 +133,10 @@ async function main() {
   // Semeia pools caso o banco esteja vazio
   await seedPools();
 
-  // Login primeiro (rapido)
+  console.log('[Dark Bot] Conectando ao Gateway do Discord...');
   await client.login(token);
+  await waitForClientReady();
+  console.log(`[Dark Bot] Bot online como ${client.user?.tag}`);
 
   // Registra comandos apos login (pode demorar)
   client.commands = await deployCommandsAuto(token);
