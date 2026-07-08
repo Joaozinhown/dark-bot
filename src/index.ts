@@ -6,10 +6,11 @@ import {
   ChatInputCommandInteraction,
 } from 'discord.js';
 import dotenv from 'dotenv';
+import http from 'http';
 import { readdirSync } from 'fs';
 import { join } from 'path';
-import http from 'http';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
+import { deployCommandsAuto, seedPools } from './startup';
 
 dotenv.config();
 
@@ -39,21 +40,6 @@ function startHealthServer() {
   });
 
   return server;
-}
-
-function loadCommands() {
-  const commandsPath = join(__dirname, 'commands');
-  const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-  for (const file of commandFiles) {
-    const filePath = join(commandsPath, file);
-    const command = require(filePath);
-
-    if ('data' in command && 'execute' in command) {
-      client.commands.set(command.data.name, command);
-      console.log(`[Commands] Carregado: ${command.data.name}`);
-    }
-  }
 }
 
 function loadEvents() {
@@ -104,7 +90,6 @@ async function main() {
   console.log('[Dark Bot] Iniciando...');
 
   startHealthServer();
-  loadCommands();
   loadEvents();
 
   const token = getDiscordToken();
@@ -118,6 +103,12 @@ async function main() {
     console.error(`[Dark Bot] ${tokenError}`);
     process.exit(1);
   }
+
+  // Semeia pools caso o banco esteja vazio
+  await seedPools();
+
+  // Registra comandos automaticamente (leitura da pasta commands/)
+  client.commands = await deployCommandsAuto(token);
 
   await client.login(token);
 }
