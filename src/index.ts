@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import http from 'http';
+import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
 
 dotenv.config();
 
@@ -91,9 +92,15 @@ async function main() {
   loadCommands();
   loadEvents();
 
-  const token = process.env.DISCORD_TOKEN;
+  const token = getDiscordToken();
   if (!token) {
-    console.error('[Dark Bot] DISCORD_TOKEN nao configurado no .env');
+    console.error('[Dark Bot] DISCORD_TOKEN nao configurado. No Render, defina em Environment Variables.');
+    process.exit(1);
+  }
+
+  const tokenError = getDiscordTokenValidationError(token);
+  if (tokenError) {
+    console.error(`[Dark Bot] ${tokenError}`);
     process.exit(1);
   }
 

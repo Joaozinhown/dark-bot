@@ -1,5 +1,6 @@
 import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import dotenv from 'dotenv';
+import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
 
 dotenv.config();
 
@@ -293,14 +294,23 @@ const commands = [
     ),
 ];
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
-
 async function deployCommands() {
   try {
     console.log('[Deploy] Registrando slash commands...');
 
+    const token = getDiscordToken();
+    if (!token) {
+      throw new Error('DISCORD_TOKEN nao configurado. No Render, defina em Environment Variables.');
+    }
+
+    const tokenError = getDiscordTokenValidationError(token);
+    if (tokenError) {
+      throw new Error(tokenError);
+    }
+
     const clientId = process.env.CLIENT_ID!;
     const guildId = process.env.GUILD_ID!;
+    const rest = new REST({ version: '10' }).setToken(token);
 
     const data = commands.map(command => command.toJSON());
 
