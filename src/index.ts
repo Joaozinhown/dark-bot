@@ -88,6 +88,21 @@ async function loginToDiscord(token: string, timeoutMs = 30000): Promise<void> {
   await waitForClientReady(timeoutMs);
 }
 
+async function validateDiscordTokenMetadata(token: string): Promise<void> {
+  try {
+    const botUser = await fetchDiscordCurrentUser(token);
+    console.log(`[Dark Bot] Token validado para ${formatDiscordUser(botUser)}`);
+
+    if (process.env.CLIENT_ID && botUser.id !== process.env.CLIENT_ID) {
+      console.error(`[Dark Bot] CLIENT_ID (${process.env.CLIENT_ID}) nao pertence ao bot do DISCORD_TOKEN (${botUser.id}). Corrija as Environment Variables no Render.`);
+      process.exit(1);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[Dark Bot] Validacao REST do token ignorada: ${message}`);
+  }
+}
+
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -133,13 +148,7 @@ async function main() {
     process.exit(1);
   }
 
-  const botUser = await fetchDiscordCurrentUser(token);
-  console.log(`[Dark Bot] Token validado para ${formatDiscordUser(botUser)}`);
-
-  if (process.env.CLIENT_ID && botUser.id !== process.env.CLIENT_ID) {
-    console.error(`[Dark Bot] CLIENT_ID (${process.env.CLIENT_ID}) nao pertence ao bot do DISCORD_TOKEN (${botUser.id}). Corrija as Environment Variables no Render.`);
-    process.exit(1);
-  }
+  await validateDiscordTokenMetadata(token);
 
   // Verifica DATABASE_URL antes de tentar seed
   if (!process.env.DATABASE_URL) {
