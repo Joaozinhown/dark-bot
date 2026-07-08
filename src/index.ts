@@ -10,7 +10,7 @@ import http from 'http';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
-import { deployCommandsAuto, seedPools } from './startup';
+import { deployCommandsAuto, seedPools, ensureDatabase } from './startup';
 
 dotenv.config();
 
@@ -106,9 +106,12 @@ async function main() {
 
   // Verifica DATABASE_URL antes de tentar seed
   if (!process.env.DATABASE_URL) {
-    console.error('[Dark Bot] DATABASE_URL nao configurada. No Render, defina: file:./prisma/darkbot.db');
+    console.error('[Dark Bot] DATABASE_URL nao configurada.');
     process.exit(1);
   }
+
+  // Sincroniza schema do banco (cria tabelas se nao existirem)
+  ensureDatabase();
 
   // Semeia pools caso o banco esteja vazio
   await seedPools();

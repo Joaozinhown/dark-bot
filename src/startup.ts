@@ -1,6 +1,7 @@
 import { REST, Routes, Collection } from 'discord.js';
 import { readdirSync } from 'fs';
 import { join } from 'path';
+import { execSync } from 'child_process';
 import prisma from './database/client';
 
 const GUILD_ID = process.env.GUILD_ID!;
@@ -97,6 +98,22 @@ const INITIAL_POOLS = [
   },
 ];
 
+export function ensureDatabase(): void {
+  console.log(`[Startup] DATABASE_URL: ${process.env.DATABASE_URL}`);
+  console.log('[Startup] Sincronizando schema do banco de dados...');
+
+  try {
+    execSync('npx prisma db push --skip-generate --accept-data-loss', {
+      stdio: 'pipe',
+      timeout: 30000,
+    });
+    console.log('[Startup] Schema do banco sincronizado com sucesso!');
+  } catch (error: any) {
+    console.error('[Startup] Erro ao sincronizar schema:', error.stderr?.toString() || error.message);
+    process.exit(1);
+  }
+}
+
 export async function deployCommandsAuto(token: string): Promise<Collection<string, any>> {
   console.log('[Startup] Carregando comandos da pasta commands/...');
 
@@ -130,7 +147,6 @@ export async function deployCommandsAuto(token: string): Promise<Collection<stri
 }
 
 export async function seedPools(): Promise<void> {
-  console.log(`[Startup] DATABASE_URL: ${process.env.DATABASE_URL}`);
   const poolCount = await prisma.pool.count();
 
   if (poolCount > 0) {
