@@ -104,6 +104,12 @@ async function main() {
     process.exit(1);
   }
 
+  // Verifica DATABASE_URL antes de tentar seed
+  if (!process.env.DATABASE_URL) {
+    console.error('[Dark Bot] DATABASE_URL nao configurada. No Render, defina: file:./prisma/darkbot.db');
+    process.exit(1);
+  }
+
   // Semeia pools caso o banco esteja vazio
   await seedPools();
 
