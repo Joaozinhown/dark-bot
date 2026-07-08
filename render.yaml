@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        value: file:./prisma/darkbot.db
+        value: file:./darkbot.db
       - key: DISCORD_TOKEN
         sync: false
       - key: CLIENT_ID
