@@ -116,10 +116,11 @@ async function main() {
   // Semeia pools caso o banco esteja vazio
   await seedPools();
 
-  // Registra comandos automaticamente (leitura da pasta commands/)
-  client.commands = await deployCommandsAuto(token);
-
+  // Login primeiro (rapido)
   await client.login(token);
+
+  // Registra comandos apos login (pode demorar)
+  client.commands = await deployCommandsAuto(token);
 }
 
 main().catch(error => {
