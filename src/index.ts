@@ -9,7 +9,6 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { readdirSync } from 'fs';
 import { join } from 'path';
-import { formatDiscordUser, fetchDiscordCurrentUser } from './utils/discord';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
 import { deployCommandsAuto, seedPools, ensureDatabase } from './startup';
 
@@ -77,29 +76,52 @@ async function waitForClientReady(timeoutMs = 30000): Promise<void> {
   });
 }
 
-async function loginToDiscord(token: string, timeoutMs = 30000): Promise<void> {
-  const timeout = new Promise<never>((_resolve, reject) => {
-    setTimeout(() => {
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function loginToDiscord(token: string, timeoutMs = 120000): Promise<void> {
+  let timeoutId: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
       reject(new Error(`Timeout em client.login apos ${timeoutMs}ms. Verifique conectividade do Render com o Gateway do Discord e se o token pertence ao bot convidado.`));
     }, timeoutMs);
   });
 
-  await Promise.race([client.login(token), timeout]);
-  await waitForClientReady(timeoutMs);
+  try {
+    await Promise.race([client.login(token), timeoutPromise]);
+    await waitForClientReady(timeoutMs);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
-async function validateDiscordTokenMetadata(token: string): Promise<void> {
-  try {
-    const botUser = await fetchDiscordCurrentUser(token);
-    console.log(`[Dark Bot] Token validado para ${formatDiscordUser(botUser)}`);
+async function connectDiscordWithRetry(token: string): Promise<void> {
+  let attempt = 1;
 
-    if (process.env.CLIENT_ID && botUser.id !== process.env.CLIENT_ID) {
-      console.error(`[Dark Bot] CLIENT_ID (${process.env.CLIENT_ID}) nao pertence ao bot do DISCORD_TOKEN (${botUser.id}). Corrija as Environment Variables no Render.`);
-      process.exit(1);
+  while (!client.isReady()) {
+    try {
+      console.log(`[Dark Bot] Conectando ao Gateway do Discord... tentativa ${attempt}`);
+      await loginToDiscord(token);
+      console.log(`[Dark Bot] Bot online como ${client.user?.tag}`);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const fatalConfigError = /invalid token|disallowed intents|privileged intent/i.test(message);
+
+      if (fatalConfigError) {
+        console.error(`[Dark Bot] Erro fatal de configuracao do Discord: ${message}`);
+        process.exit(1);
+      }
+
+      client.destroy();
+
+      const delayMs = Math.min(300000, attempt * 30000);
+      console.warn(`[Dark Bot] Falha ao conectar no Discord: ${message}`);
+      console.warn(`[Dark Bot] Nova tentativa em ${Math.round(delayMs / 1000)}s para evitar rate limit.`);
+      await sleep(delayMs);
+      attempt += 1;
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[Dark Bot] Validacao REST do token ignorada: ${message}`);
   }
 }
 
@@ -148,8 +170,6 @@ async function main() {
     process.exit(1);
   }
 
-  await validateDiscordTokenMetadata(token);
-
   // Verifica DATABASE_URL antes de tentar seed
   if (!process.env.DATABASE_URL) {
     console.error('[Dark Bot] DATABASE_URL nao configurada.');
@@ -162,9 +182,7 @@ async function main() {
   // Semeia pools caso o banco esteja vazio
   await seedPools();
 
-  console.log('[Dark Bot] Conectando ao Gateway do Discord...');
-  await loginToDiscord(token);
-  console.log(`[Dark Bot] Bot online como ${client.user?.tag}`);
+  await connectDiscordWithRetry(token);
 
   // Registra comandos apos login (pode demorar)
   client.commands = await deployCommandsAuto(token);
