@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Pool {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  nome      String
+  formato   String
+  ativa     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+  mapas     PoolMapa[]
+  killers   PoolKiller[]
+  confrontos Confronto[]
+  @@unique([id, guildId])
+}
+
+model PoolMapa {
+  id        Int      @id @default(autoincrement())
+  poolId    Int
+  pool      Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  nome      String
+  ordem     Int
+}
+
+model PoolKiller {
+  id        Int      @id @default(autoincrement())
+  poolId    Int
+  pool      Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  nome      String
+  ordem     Int
+}
+
+model Confronto {
+  id          Int      @id @default(autoincrement())
+  guildId     String
+  poolId      Int
+  pool        Pool     @relation(fields: [poolId], references: [id])
+  formato     String
+  timeARoleId String
+  timeBRoleId String
+  timeAVitorias Int    @default(0)
+  timeBVitorias Int    @default(0)
+  status      String   @default("aguardando")
+  currentSet  Int      @default(1)
+  channelId   String?
+  vozTimeAId  String?
+  vozTimeBId  String?
+  vencedor    String?
+  encerradoEm DateTime?
+  motivoEncerramento String?
+  criadoEm    DateTime @default(now())
+  sets        Set[]
+  vetoState   VetoState?
+}
+
+model Set {
+  id            Int       @id @default(autoincrement())
+  confrontoId   Int
+  confronto     Confronto @relation(fields: [confrontoId], references: [id])
+  numero        Int
+  vencedorTime  String?
+  mapaUsado     String?
+  killerUsado   String?
+  jogadoEm      DateTime?
+}
+
+model VetoState {
+  id            Int       @id @default(autoincrement())
+  confrontoId   Int       @unique
+  confronto     Confronto @relation(fields: [confrontoId], references: [id])
+  tipo          String
+  set           Int
+  vezDe         String
+  mapasRestantes String
+  killersRestantes String
+  mapaEscolhido String?
+  killerEscolhido String?
+  messageId     String?
+}
+
+model Jogador {
+  id        String @id
+  guildId   String
+  nome      String
+  vitorias  Int    @default(0)
+  derrotas   Int    @default(0)
+  confrontos Int    @default(0)
+  @@unique([id, guildId])
+}

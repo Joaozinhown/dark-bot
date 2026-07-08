@@ -1,0 +1,436 @@
+import {
+  SlashCommandBuilder,
+  ChatInputCommandInteraction,
+  PermissionFlagsBits,
+  EmbedBuilder,
+} from 'discord.js';
+import prisma from '../database/client';
+import { COLORS } from '../config';
+import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
+
+const DTA_LOGO = 'https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp';
+
+export const data = new SlashCommandBuilder()
+  .setName('gerenciar-pool')
+  .setDescription('Gerencia pools de mapas e killers')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .setDMPermission(false)
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('criar')
+      .setDescription('Cria uma nova pool')
+      .addStringOption(option =>
+        option
+          .setName('nome')
+          .setDescription('Nome da pool (ex: Pool 1)')
+          .setRequired(true),
+      )
+      .addStringOption(option =>
+        option
+          .setName('formato')
+          .setDescription('Formato da pool')
+          .setRequired(true)
+          .addChoices(
+            { name: 'MD3 (Melhor de 3)', value: 'MD3' },
+            { name: 'MD5 (Melhor de 5)', value: 'MD5' },
+          ),
+      ),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('adicionar-mapa')
+      .setDescription('Adiciona um mapa a uma pool')
+      .addIntegerOption(option =>
+        option
+          .setName('pool-id')
+          .setDescription('ID da pool')
+          .setRequired(true),
+      )
+      .addStringOption(option =>
+        option
+          .setName('mapa')
+          .setDescription('Nome do mapa')
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('remover-mapa')
+      .setDescription('Remove um mapa de uma pool')
+      .addIntegerOption(option =>
+        option
+          .setName('pool-id')
+          .setDescription('ID da pool')
+          .setRequired(true),
+      )
+      .addStringOption(option =>
+        option
+          .setName('mapa')
+          .setDescription('Nome do mapa para remover')
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('adicionar-killer')
+      .setDescription('Adiciona um killer a uma pool')
+      .addIntegerOption(option =>
+        option
+          .setName('pool-id')
+          .setDescription('ID da pool')
+          .setRequired(true),
+      )
+      .addStringOption(option =>
+        option
+          .setName('killer')
+          .setDescription('Nome do killer')
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('remover-killer')
+      .setDescription('Remove um killer de uma pool')
+      .addIntegerOption(option =>
+        option
+          .setName('pool-id')
+          .setDescription('ID da pool')
+          .setRequired(true),
+      )
+      .addStringOption(option =>
+        option
+          .setName('killer')
+          .setDescription('Nome do killer para remover')
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('listar')
+      .setDescription('Lista todas as pools com mapas e killers'),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('deletar')
+      .setDescription('Deleta uma pool')
+      .addIntegerOption(option =>
+        option
+          .setName('pool-id')
+          .setDescription('ID da pool para deletar')
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('toggle')
+      .setDescription('Ativa/desativa uma pool')
+      .addIntegerOption(option =>
+        option
+          .setName('pool-id')
+          .setDescription('ID da pool')
+          .setRequired(true),
+      ),
+  );
+
+export async function execute(interaction: ChatInputCommandInteraction) {
+  const subcommand = interaction.options.getSubcommand();
+
+  switch (subcommand) {
+    case 'criar':
+      await handleCriar(interaction);
+      break;
+    case 'adicionar-mapa':
+      await handleAdicionarMapa(interaction);
+      break;
+    case 'remover-mapa':
+      await handleRemoverMapa(interaction);
+      break;
+    case 'adicionar-killer':
+      await handleAdicionarKiller(interaction);
+      break;
+    case 'remover-killer':
+      await handleRemoverKiller(interaction);
+      break;
+    case 'listar':
+      await handleListar(interaction);
+      break;
+    case 'deletar':
+      await handleDeletar(interaction);
+      break;
+    case 'toggle':
+      await handleToggle(interaction);
+      break;
+  }
+}
+
+async function handleCriar(interaction: ChatInputCommandInteraction) {
+  const nome = interaction.options.getString('nome', true);
+  const formato = interaction.options.getString('formato', true) as 'MD3' | 'MD5';
+
+  const pool = await prisma.pool.create({
+    data: {
+      guildId: interaction.guildId!,
+      nome,
+      formato,
+    },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Pool **${pool.nome}** criada com ID **${pool.id}**.\n\nUse os comandos \`adicionar-mapa\` e \`adicionar-killer\` para configurar.`)],
+    ephemeral: true,
+  });
+}
+
+async function handleAdicionarMapa(interaction: ChatInputCommandInteraction) {
+  const poolId = interaction.options.getInteger('pool-id', true);
+  const mapa = interaction.options.getString('mapa', true);
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+    include: { mapas: true },
+  });
+
+  if (!pool || pool.guildId !== interaction.guildId!) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Pool nao encontrada.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const mapaExistente = pool.mapas.find(m => m.nome.toLowerCase() === mapa.toLowerCase());
+  if (mapaExistente) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Este mapa ja existe nesta pool.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const ordem = pool.mapas.length + 1;
+
+  await prisma.poolMapa.create({
+    data: {
+      poolId,
+      nome: mapa,
+      ordem,
+    },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Mapa **${mapa}** adicionado a pool **${pool.nome}** (Posicao: ${ordem}).`)],
+    ephemeral: true,
+  });
+}
+
+async function handleRemoverMapa(interaction: ChatInputCommandInteraction) {
+  const poolId = interaction.options.getInteger('pool-id', true);
+  const mapa = interaction.options.getString('mapa', true);
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+    include: { mapas: true },
+  });
+
+  if (!pool || pool.guildId !== interaction.guildId!) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Pool nao encontrada.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const mapaEncontrado = pool.mapas.find(m => m.nome.toLowerCase() === mapa.toLowerCase());
+  if (!mapaEncontrado) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Mapa nao encontrado nesta pool.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await prisma.poolMapa.delete({
+    where: { id: mapaEncontrado.id },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Mapa **${mapa}** removido da pool **${pool.nome}**.`)],
+    ephemeral: true,
+  });
+}
+
+async function handleAdicionarKiller(interaction: ChatInputCommandInteraction) {
+  const poolId = interaction.options.getInteger('pool-id', true);
+  const killer = interaction.options.getString('killer', true);
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+    include: { killers: true },
+  });
+
+  if (!pool || pool.guildId !== interaction.guildId!) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Pool nao encontrada.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const killerExistente = pool.killers.find(k => k.nome.toLowerCase() === killer.toLowerCase());
+  if (killerExistente) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Este killer ja existe nesta pool.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const ordem = pool.killers.length + 1;
+
+  await prisma.poolKiller.create({
+    data: {
+      poolId,
+      nome: killer,
+      ordem,
+    },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Killer **${killer}** adicionado a pool **${pool.nome}** (Posicao: ${ordem}).`)],
+    ephemeral: true,
+  });
+}
+
+async function handleRemoverKiller(interaction: ChatInputCommandInteraction) {
+  const poolId = interaction.options.getInteger('pool-id', true);
+  const killer = interaction.options.getString('killer', true);
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+    include: { killers: true },
+  });
+
+  if (!pool || pool.guildId !== interaction.guildId!) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Pool nao encontrada.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const killerEncontrado = pool.killers.find(k => k.nome.toLowerCase() === killer.toLowerCase());
+  if (!killerEncontrado) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Killer nao encontrado nesta pool.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await prisma.poolKiller.delete({
+    where: { id: killerEncontrado.id },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Killer **${killer}** removido da pool **${pool.nome}**.`)],
+    ephemeral: true,
+  });
+}
+
+async function handleListar(interaction: ChatInputCommandInteraction) {
+  const pools = await prisma.pool.findMany({
+    where: {
+      guildId: interaction.guildId!,
+      ativa: true,
+    },
+    include: {
+      mapas: { orderBy: { ordem: 'asc' } },
+      killers: { orderBy: { ordem: 'asc' } },
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  if (pools.length === 0) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Nenhuma pool encontrada. Use \`/gerenciar-pool criar\` para criar uma.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('POOLS DISPONIVEIS')
+    .setColor(COLORS.accent as any)
+    .setThumbnail(DTA_LOGO)
+    .setFooter({ text: 'Dark Trials Arena' })
+    .setTimestamp();
+
+  const description = pools.map(pool => {
+    const mapas = pool.mapas.map(m => m.nome).join(', ') || 'Nenhum mapa';
+    const killers = pool.killers.map(k => k.nome).join(', ') || 'Nenhum killer';
+
+    return [
+      `**${pool.nome}** (ID: ${pool.id}) — ${pool.formato}`,
+      `**Mapas (${pool.mapas.length}):** ${mapas}`,
+      `**Killers (${pool.killers.length}):** ${killers}`,
+    ].join('\n');
+  }).join('\n\n');
+
+  embed.setDescription(description);
+
+  await interaction.reply({
+    embeds: [embed],
+    ephemeral: true,
+  });
+}
+
+async function handleDeletar(interaction: ChatInputCommandInteraction) {
+  const poolId = interaction.options.getInteger('pool-id', true);
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+  });
+
+  if (!pool || pool.guildId !== interaction.guildId!) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Pool nao encontrada.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await prisma.pool.delete({
+    where: { id: poolId },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Pool **${pool.nome}** deletada.`)],
+    ephemeral: true,
+  });
+}
+
+async function handleToggle(interaction: ChatInputCommandInteraction) {
+  const poolId = interaction.options.getInteger('pool-id', true);
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+  });
+
+  if (!pool || pool.guildId !== interaction.guildId!) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Pool nao encontrada.')],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await prisma.pool.update({
+    where: { id: poolId },
+    data: { ativa: !pool.ativa },
+  });
+
+  await interaction.reply({
+    embeds: [createSuccessEmbed(`Pool **${pool.nome}** ${pool.ativa ? 'desativada' : 'ativada'}.`)],
+    ephemeral: true,
+  });
+}
