@@ -1,6 +1,6 @@
 import { REST, Routes, Collection } from 'discord.js';
-import { readdirSync } from 'fs';
-import { join } from 'path';
+import { readdirSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 import prisma from './database/client';
 
 const GUILD_ID = process.env.GUILD_ID!;
@@ -130,6 +130,15 @@ export async function deployCommandsAuto(token: string): Promise<Collection<stri
 }
 
 export async function seedPools(): Promise<void> {
+  // Garante que o diretorio do banco existe
+  const dbUrl = process.env.DATABASE_URL || '';
+  const dbPathMatch = dbUrl.match(/file:(.+)/);
+  if (dbPathMatch) {
+    const dbDir = dirname(join(process.cwd(), dbPathMatch[1]));
+    mkdirSync(dbDir, { recursive: true });
+    console.log(`[Startup] Diretorio do banco: ${dbDir}`);
+  }
+
   const poolCount = await prisma.pool.count();
 
   if (poolCount > 0) {
