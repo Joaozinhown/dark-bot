@@ -27,6 +27,20 @@ const client = new Client({
 
 client.commands = new Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>();
 
+function startHealthServer() {
+  const port = parseInt(process.env.PORT || '3000');
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Dark Bot is running!');
+  });
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`[Dark Bot] HTTP server rodando na porta ${port}`);
+  });
+
+  return server;
+}
+
 function loadCommands() {
   const commandsPath = join(__dirname, 'commands');
   const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -89,6 +103,7 @@ client.on(Events.InteractionCreate, async interaction => {
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
+  startHealthServer();
   loadCommands();
   loadEvents();
 
@@ -105,17 +120,6 @@ async function main() {
   }
 
   await client.login(token);
-
-  // HTTP server para manter o servico ativo no Render (free tier)
-  const port = parseInt(process.env.PORT || '3000');
-  const server = http.createServer((_req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Dark Bot is running!');
-  });
-
-  server.listen(port, () => {
-    console.log(`[Dark Bot] HTTP server rodando na porta ${port}`);
-  });
 }
 
 main().catch(error => {
