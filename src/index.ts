@@ -8,6 +8,7 @@ import {
 import dotenv from 'dotenv';
 import { readdirSync } from 'fs';
 import { join } from 'path';
+import http from 'http';
 
 dotenv.config();
 
@@ -97,6 +98,17 @@ async function main() {
   }
 
   await client.login(token);
+
+  // HTTP server para manter o servico ativo no Render (free tier)
+  const port = parseInt(process.env.PORT || '3000');
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Dark Bot is running!');
+  });
+
+  server.listen(port, () => {
+    console.log(`[Dark Bot] HTTP server rodando na porta ${port}`);
+  });
 }
 
 main().catch(error => {
