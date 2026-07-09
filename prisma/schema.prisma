@@ -85,11 +85,11 @@ model VetoState {
 }
 
 model Jogador {
-  id        String @id
+  id        String
   guildId   String
   nome      String
   vitorias  Int    @default(0)
   derrotas   Int    @default(0)
   confrontos Int    @default(0)
-  @@unique([id, guildId])
+  @@id([id, guildId])
 }

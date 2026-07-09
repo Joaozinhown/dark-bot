@@ -141,7 +141,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     const reply = {
       content: 'Ocorreu um erro ao executar este comando.',
-      ephemeral: true,
+      flags: 64,
     };
 
     if (interaction.replied || interaction.deferred) {

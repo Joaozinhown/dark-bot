@@ -177,7 +177,7 @@ async function handleCriar(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Pool **${pool.nome}** criada com ID **${pool.id}**.\n\nUse os comandos \`adicionar-mapa\` e \`adicionar-killer\` para configurar.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -193,7 +193,7 @@ async function handleAdicionarMapa(interaction: ChatInputCommandInteraction) {
   if (!pool || pool.guildId !== interaction.guildId!) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -202,7 +202,7 @@ async function handleAdicionarMapa(interaction: ChatInputCommandInteraction) {
   if (mapaExistente) {
     await interaction.reply({
       embeds: [createErrorEmbed('Este mapa ja existe nesta pool.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -219,7 +219,7 @@ async function handleAdicionarMapa(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Mapa **${mapa}** adicionado a pool **${pool.nome}** (Posicao: ${ordem}).`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -235,7 +235,7 @@ async function handleRemoverMapa(interaction: ChatInputCommandInteraction) {
   if (!pool || pool.guildId !== interaction.guildId!) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -244,7 +244,7 @@ async function handleRemoverMapa(interaction: ChatInputCommandInteraction) {
   if (!mapaEncontrado) {
     await interaction.reply({
       embeds: [createErrorEmbed('Mapa nao encontrado nesta pool.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -255,7 +255,7 @@ async function handleRemoverMapa(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Mapa **${mapa}** removido da pool **${pool.nome}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -271,7 +271,7 @@ async function handleAdicionarKiller(interaction: ChatInputCommandInteraction) {
   if (!pool || pool.guildId !== interaction.guildId!) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -280,7 +280,7 @@ async function handleAdicionarKiller(interaction: ChatInputCommandInteraction) {
   if (killerExistente) {
     await interaction.reply({
       embeds: [createErrorEmbed('Este killer ja existe nesta pool.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -297,7 +297,7 @@ async function handleAdicionarKiller(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Killer **${killer}** adicionado a pool **${pool.nome}** (Posicao: ${ordem}).`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -313,7 +313,7 @@ async function handleRemoverKiller(interaction: ChatInputCommandInteraction) {
   if (!pool || pool.guildId !== interaction.guildId!) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -322,7 +322,7 @@ async function handleRemoverKiller(interaction: ChatInputCommandInteraction) {
   if (!killerEncontrado) {
     await interaction.reply({
       embeds: [createErrorEmbed('Killer nao encontrado nesta pool.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -333,7 +333,7 @@ async function handleRemoverKiller(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Killer **${killer}** removido da pool **${pool.nome}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -353,7 +353,7 @@ async function handleListar(interaction: ChatInputCommandInteraction) {
   if (pools.length === 0) {
     await interaction.reply({
       embeds: [createErrorEmbed('Nenhuma pool encontrada. Use \`/gerenciar-pool criar\` para criar uma.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -380,7 +380,7 @@ async function handleListar(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -394,7 +394,7 @@ async function handleDeletar(interaction: ChatInputCommandInteraction) {
   if (!pool || pool.guildId !== interaction.guildId!) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -405,7 +405,7 @@ async function handleDeletar(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Pool **${pool.nome}** deletada.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -419,7 +419,7 @@ async function handleToggle(interaction: ChatInputCommandInteraction) {
   if (!pool || pool.guildId !== interaction.guildId!) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -431,6 +431,6 @@ async function handleToggle(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Pool **${pool.nome}** ${pool.ativa ? 'desativada' : 'ativada'}.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }

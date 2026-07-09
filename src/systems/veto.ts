@@ -111,7 +111,7 @@ export async function handleBanButton(
   if (!vetoState) {
     await interaction.reply({
       embeds: [createErrorEmbed('Estado de veto nao encontrado.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -123,7 +123,7 @@ export async function handleBanButton(
   if (!confronto) {
     await interaction.reply({
       embeds: [createErrorEmbed('Confronto nao encontrado.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -134,7 +134,7 @@ export async function handleBanButton(
   if (!timeARole || !timeBRole) {
     await interaction.reply({
       embeds: [createErrorEmbed('Time nao encontrado.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -145,7 +145,7 @@ export async function handleBanButton(
   if (!member || !member.roles.cache.has(vezRoleId)) {
     await interaction.reply({
       embeds: [createErrorEmbed('Nao e a vez do seu time.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }

@@ -45,7 +45,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (!poolConfig) {
     await interaction.reply({
       embeds: [createErrorEmbed('Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -53,7 +53,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (poolConfig.mapas.length < 2) {
     await interaction.reply({
       embeds: [createErrorEmbed('A pool precisa ter pelo menos 2 mapas para o sistema de veto funcionar.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -61,7 +61,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (poolConfig.killers.length < 2) {
     await interaction.reply({
       embeds: [createErrorEmbed('A pool precisa ter pelo menos 2 killers para o sistema de veto funcionar.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -69,7 +69,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (timeA.id === timeB.id) {
     await interaction.reply({
       embeds: [createErrorEmbed('Os times devem ser diferentes.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }

@@ -102,7 +102,7 @@ async function handleRenomear(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo renomeado para **${novoNome}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -113,7 +113,7 @@ async function handleDeletar(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo **${cargo.name}** deletado.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -124,7 +124,7 @@ async function handleMembroAdicionar(interaction: ChatInputCommandInteraction) {
   if (!membro || !(membro instanceof GuildMember)) {
     await interaction.reply({
       embeds: [createErrorEmbed('Membro invalido.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -133,7 +133,7 @@ async function handleMembroAdicionar(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Membro adicionado ao cargo **${cargo.name}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -144,7 +144,7 @@ async function handleMembroRemover(interaction: ChatInputCommandInteraction) {
   if (!membro || !(membro instanceof GuildMember)) {
     await interaction.reply({
       embeds: [createErrorEmbed('Membro invalido.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -153,6 +153,6 @@ async function handleMembroRemover(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Membro removido do cargo **${cargo.name}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }

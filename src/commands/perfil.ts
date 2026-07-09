@@ -42,6 +42,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true,
+    flags: 64,
   });
 }

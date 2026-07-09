@@ -42,7 +42,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (!confronto) {
     await interaction.reply({
       embeds: [createErrorEmbed('Confronto nao encontrado.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
@@ -50,7 +50,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (confronto.status === 'encerrado') {
     await interaction.reply({
       embeds: [createErrorEmbed('Este confronto ja foi encerrado.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }

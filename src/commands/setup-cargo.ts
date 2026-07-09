@@ -36,7 +36,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (parsed === null) {
       await interaction.reply({
         embeds: [createErrorEmbed('Cor hex invalida. Use o formato #RRGGBB.')],
-        ephemeral: true,
+        flags: 64,
       });
       return;
     }
