@@ -20,6 +20,13 @@ model Pool {
   @@unique([id, guildId])
 }
 
+model GuildConfig {
+  guildId      String   @id
+  adminRoleIds String   @default("[]")
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
 model PoolMapa {
   id        Int      @id @default(autoincrement())
   poolId    Int

@@ -36,12 +36,18 @@ export function createVetoEmbed(
   tipo: 'mapa' | 'killer',
   set: number,
   vezDe: string,
-  itemAtual: string,
+  itensRestantes: string[],
   timeName: string,
 ): EmbedBuilder {
   const title = tipo === 'mapa'
     ? `VETO DE MAPAS — SET ${set}`
     : `VETO DE KILLERS — SET ${set}`;
+
+  const itemLabel = tipo === 'mapa' ? 'Mapas' : 'Killers';
+  const preview = itensRestantes
+    .slice(0, 12)
+    .map((item, index) => `**${index + 1}.** ${item}`)
+    .join('\n');
 
   return new EmbedBuilder()
     .setTitle(title)
@@ -49,10 +55,13 @@ export function createVetoEmbed(
     .setDescription(
       [
         `**Vez de:** ${timeName}`,
+        `**Restantes:** ${itensRestantes.length}`,
         '',
-        `**${tipo === 'mapa' ? 'Mapa' : 'Killer'} atual:** ${itemAtual}`,
+        `**${itemLabel} disponiveis:**`,
+        preview,
+        itensRestantes.length > 12 ? `\n...e mais ${itensRestantes.length - 12}` : '',
         '',
-        'Clique no botao para banir.',
+        'Use o menu abaixo para escolher o banimento.',
       ].join('\n'),
     )
     .setThumbnail(DTA_LOGO)
@@ -80,9 +89,9 @@ export function createBanEmbed(
         `**${timeName} baniu:** ${itemBanido}`,
         '',
         `**Vez de:** ${proximoTimeName}`,
-        `**${tipo === 'mapa' ? 'Mapa' : 'Killer'} atual:** ${proximoItem}`,
+        `**Proximo restante:** ${proximoItem}`,
         '',
-        'Clique no botao para banir.',
+        'Aguardando proxima escolha no menu.',
       ].join('\n'),
     )
     .setThumbnail(DTA_LOGO)

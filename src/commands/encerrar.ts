@@ -1,7 +1,6 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
 } from 'discord.js';
 import prisma from '../database/client';
 import { deleteConfrontoChannels } from '../utils/channels';
@@ -10,7 +9,6 @@ import { createEncerramentoEmbed, createErrorEmbed, createSuccessEmbed } from '.
 export const data = new SlashCommandBuilder()
   .setName('encerrar')
   .setDescription('Encerra um confronto e limpa canais')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addIntegerOption(option =>
     option

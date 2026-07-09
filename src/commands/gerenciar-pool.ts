@@ -1,7 +1,6 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
   EmbedBuilder,
 } from 'discord.js';
 import prisma from '../database/client';
@@ -13,7 +12,6 @@ const DTA_LOGO = 'https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/pub
 export const data = new SlashCommandBuilder()
   .setName('gerenciar-pool')
   .setDescription('Gerencia pools de mapas e killers')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addSubcommand(subcommand =>
     subcommand

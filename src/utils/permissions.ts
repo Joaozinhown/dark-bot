@@ -4,9 +4,47 @@ import {
   GuildMember,
   Role,
 } from 'discord.js';
+import prisma from '../database/client';
 
 export function hasOrganizationPermission(member: GuildMember): boolean {
   return member.permissions.has(PermissionFlagsBits.ManageGuild);
+}
+
+export async function getAdminRoleIds(guildId: string): Promise<string[]> {
+  const config = await prisma.guildConfig.findUnique({
+    where: { guildId },
+  });
+
+  if (!config) return [];
+
+  try {
+    const roleIds = JSON.parse(config.adminRoleIds);
+    return Array.isArray(roleIds) ? roleIds.filter((roleId): roleId is string => typeof roleId === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function setAdminRoleIds(guildId: string, roleIds: string[]): Promise<void> {
+  const uniqueRoleIds = Array.from(new Set(roleIds));
+
+  await prisma.guildConfig.upsert({
+    where: { guildId },
+    create: {
+      guildId,
+      adminRoleIds: JSON.stringify(uniqueRoleIds),
+    },
+    update: {
+      adminRoleIds: JSON.stringify(uniqueRoleIds),
+    },
+  });
+}
+
+export async function hasBotAdminPermission(member: GuildMember): Promise<boolean> {
+  if (hasOrganizationPermission(member)) return true;
+
+  const roleIds = await getAdminRoleIds(member.guild.id);
+  return roleIds.some(roleId => member.roles.cache.has(roleId));
 }
 
 export function hasCaptainPermission(member: GuildMember, teamRoleId: string): boolean {

@@ -1,7 +1,6 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
   TextChannel,
 } from 'discord.js';
 import prisma from '../database/client';
@@ -14,7 +13,6 @@ import { ConfrontoData } from '../types/index';
 export const data = new SlashCommandBuilder()
   .setName('criar-confronto')
   .setDescription('Cria um confronto entre dois times')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addIntegerOption(option =>
     option

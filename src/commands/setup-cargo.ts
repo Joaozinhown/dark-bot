@@ -1,7 +1,6 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
   Colors,
 } from 'discord.js';
 import { parseHexColor } from '../utils/permissions';
@@ -10,7 +9,6 @@ import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
 export const data = new SlashCommandBuilder()
   .setName('setup-cargo')
   .setDescription('Configura um cargo de time para o evento')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addStringOption(option =>
     option

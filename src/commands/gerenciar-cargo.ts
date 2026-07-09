@@ -1,7 +1,6 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
   GuildMember,
   Role,
 } from 'discord.js';
@@ -10,7 +9,6 @@ import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
 export const data = new SlashCommandBuilder()
   .setName('gerenciar-cargo')
   .setDescription('Gerencia cargos de time existentes')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addSubcommand(subcommand =>
     subcommand

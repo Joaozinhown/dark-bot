@@ -6,6 +6,8 @@ import {
   ButtonStyle,
   ButtonInteraction,
   GuildMember,
+  StringSelectMenuBuilder,
+  StringSelectMenuInteraction,
 } from 'discord.js';
 import prisma from '../database/client';
 import { PoolConfig, VetoVez } from '../types/index';
@@ -70,22 +72,26 @@ async function sendVetoStep(
     return;
   }
 
-  const itemAtual = itensRestantes[0];
-
   const embed = createVetoEmbed(
     vetoState.tipo as 'mapa' | 'killer',
     vetoState.set,
     vezRole.name,
-    itemAtual,
+    itensRestantes,
     vezRole.name,
   );
 
-  const banButton = new ButtonBuilder()
-    .setCustomId(`ban:${confrontoId}:${vetoState.tipo}`)
-    .setLabel('BANIR')
-    .setStyle(ButtonStyle.Danger);
+  const banSelect = new StringSelectMenuBuilder()
+    .setCustomId(`ban-select:${confrontoId}:${vetoState.tipo}`)
+    .setPlaceholder(`Escolha ${vetoState.tipo === 'mapa' ? 'um mapa' : 'um killer'} para banir`)
+    .addOptions(
+      itensRestantes.slice(0, 25).map((item, index) => ({
+        label: item.slice(0, 100),
+        value: item,
+        description: `${index + 1} de ${itensRestantes.length}`,
+      })),
+    );
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(banButton);
+  const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(banSelect);
 
   const msg = await canalTexto.send({
     content: `<@&${vezRole.id}>`,
@@ -103,6 +109,23 @@ export async function handleBanButton(
   interaction: ButtonInteraction,
   confrontoId: number,
   tipo: string,
+): Promise<void> {
+  await applyBan(interaction, confrontoId, tipo);
+}
+
+export async function handleBanSelection(
+  interaction: StringSelectMenuInteraction,
+  confrontoId: number,
+  tipo: string,
+): Promise<void> {
+  await applyBan(interaction, confrontoId, tipo, interaction.values[0]);
+}
+
+async function applyBan(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+  confrontoId: number,
+  tipo: string,
+  selectedItem?: string,
 ): Promise<void> {
   const vetoState = await prisma.vetoState.findUnique({
     where: { confrontoId },
@@ -123,6 +146,14 @@ export async function handleBanButton(
   if (!confronto) {
     await interaction.reply({
       embeds: [createErrorEmbed('Confronto nao encontrado.')],
+      flags: 64,
+    });
+    return;
+  }
+
+  if (tipo !== vetoState.tipo) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Esta etapa de veto ja mudou. Use a mensagem mais recente.')],
       flags: 64,
     });
     return;
@@ -156,7 +187,18 @@ export async function handleBanButton(
     ? JSON.parse(vetoState.mapasRestantes) as string[]
     : JSON.parse(vetoState.killersRestantes) as string[];
 
-  const itemBanido = itensRestantes.shift()!;
+  const itemBanido = selectedItem ?? itensRestantes[0];
+  const itemIndex = itensRestantes.indexOf(itemBanido);
+
+  if (itemIndex < 0) {
+    await interaction.followUp({
+      embeds: [createErrorEmbed('Item de veto nao encontrado. Use a mensagem mais recente.')],
+      flags: 64,
+    });
+    return;
+  }
+
+  itensRestantes.splice(itemIndex, 1);
 
   const proximoTimeName = vetoState.vezDe === 'A' ? timeBRole.name : timeARole.name;
   const proximoItem = itensRestantes[0] || 'Definido';

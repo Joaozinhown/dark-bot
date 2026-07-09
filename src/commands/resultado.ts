@@ -1,7 +1,6 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
 } from 'discord.js';
 import prisma from '../database/client';
 import { getVitoriasNecessarias, PoolFormato } from '../config';
@@ -11,7 +10,6 @@ import { ConfrontoData, VencedorTime } from '../types/index';
 export const data = new SlashCommandBuilder()
   .setName('resultado')
   .setDescription('Registra o vencedor do confronto')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addIntegerOption(option =>
     option

@@ -4,6 +4,7 @@ import {
   GatewayIntentBits,
   Collection,
   ChatInputCommandInteraction,
+  GuildMember,
 } from 'discord.js';
 import dotenv from 'dotenv';
 import http from 'http';
@@ -11,6 +12,8 @@ import { readdirSync } from 'fs';
 import { join } from 'path';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
 import { deployCommandsAuto, seedPools, ensureDatabase } from './startup';
+import { createErrorEmbed } from './utils/embeds';
+import { hasBotAdminPermission } from './utils/permissions';
 
 dotenv.config();
 
@@ -26,6 +29,16 @@ const client = new Client({
 }) as Client & ClientCommands;
 
 client.commands = new Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>();
+
+const ADMIN_COMMANDS = new Set([
+  'criar-confronto',
+  'encerrar',
+  'gerenciar-cargo',
+  'gerenciar-pool',
+  'relatorios',
+  'resultado',
+  'setup-cargo',
+]);
 
 function startHealthServer() {
   const port = parseInt(process.env.PORT || '3000');
@@ -135,6 +148,19 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   try {
+    if (ADMIN_COMMANDS.has(interaction.commandName)) {
+      const member = interaction.member instanceof GuildMember ? interaction.member : null;
+      const canUseCommand = member ? await hasBotAdminPermission(member) : false;
+
+      if (!canUseCommand) {
+        await interaction.reply({
+          embeds: [createErrorEmbed('Voce nao tem permissao para usar este comando.')],
+          flags: 64,
+        });
+        return;
+      }
+    }
+
     await command.execute(interaction);
   } catch (error) {
     console.error(`[Commands] Erro ao executar ${interaction.commandName}:`, error);
