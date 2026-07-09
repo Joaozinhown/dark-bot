@@ -105,6 +105,10 @@ export function ensureDatabase(): void {
 
   try {
     execSync('npx prisma db push --skip-generate --accept-data-loss', {
+      env: {
+        ...process.env,
+        PRISMA_HIDE_UPDATE_MESSAGE: process.env.PRISMA_HIDE_UPDATE_MESSAGE ?? '1',
+      },
       stdio: 'pipe',
       timeout: 30000,
     });
