@@ -1,0 +1,6 @@
+{
+  "discloud.api.actions.strategy": "socket",
+  "discloud.upload.focus.logs": "always",
+  "discloud.status.bar.behavior": "upload",
+  "discloud.debug": true
+}
