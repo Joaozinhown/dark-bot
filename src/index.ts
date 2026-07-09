@@ -11,7 +11,7 @@ import http from 'http';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
-import { deployCommandsAuto, seedPools, ensureDatabase } from './startup';
+import { deployCommandsAuto, seedPools, ensureDatabase, syncGuildCommands } from './startup';
 import { createErrorEmbed } from './utils/embeds';
 import { hasBotAdminPermission } from './utils/permissions';
 
@@ -19,6 +19,13 @@ dotenv.config();
 
 interface ClientCommands {
   commands: Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>;
+}
+
+interface CommandModule {
+  data?: {
+    toJSON: () => unknown;
+  };
+  execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
 const client = new Client({
@@ -39,6 +46,8 @@ const ADMIN_COMMANDS = new Set([
   'resultado',
   'setup-cargo',
 ]);
+
+let commandPayloads: unknown[] = [];
 
 function startHealthServer() {
   const port = parseInt(process.env.PORT || '3000');
@@ -178,6 +187,17 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
+client.on(Events.GuildCreate, async guild => {
+  const token = getDiscordToken();
+  if (!token || commandPayloads.length === 0) return;
+
+  try {
+    await syncGuildCommands(token, guild, commandPayloads);
+  } catch (error) {
+    console.error(`[Startup] Erro ao sincronizar comandos no servidor ${guild.id}:`, error);
+  }
+});
+
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
@@ -208,7 +228,10 @@ async function main() {
   await connectDiscordWithRetry(token);
 
   // Registra comandos apos login (pode demorar)
-  client.commands = await deployCommandsAuto(token);
+  client.commands = await deployCommandsAuto(token, client);
+  commandPayloads = Array.from(client.commands.values())
+    .map((command: CommandModule) => command.data?.toJSON())
+    .filter((payload): payload is unknown => Boolean(payload));
 }
 
 main().catch(error => {

@@ -1,4 +1,4 @@
-import { REST, Routes, Collection } from 'discord.js';
+import { REST, Routes, Collection, Client, Guild } from 'discord.js';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
@@ -7,6 +7,12 @@ import prisma from './database/client';
 const GUILD_ID = process.env.GUILD_ID!;
 const CLIENT_ID = process.env.CLIENT_ID!;
 const COMMAND_SCOPE = process.env.COMMAND_SCOPE === 'guild' ? 'guild' : 'global';
+const REGISTER_GUILD_COMMANDS = process.env.REGISTER_GUILD_COMMANDS !== 'false';
+
+interface LoadedCommands {
+  payloads: any[];
+  collection: Collection<string, any>;
+}
 
 const INITIAL_POOLS = [
   {
@@ -119,13 +125,13 @@ export function ensureDatabase(): void {
   }
 }
 
-export async function deployCommandsAuto(token: string): Promise<Collection<string, any>> {
+function loadCommands(): LoadedCommands {
   console.log('[Startup] Carregando comandos da pasta commands/...');
 
   const commandsPath = join(__dirname, 'commands');
   const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-  const commands: any[] = [];
+  const payloads: any[] = [];
   const commandsCollection = new Collection<string, any>();
 
   for (const file of commandFiles) {
@@ -133,11 +139,37 @@ export async function deployCommandsAuto(token: string): Promise<Collection<stri
     const command = require(filePath);
 
     if ('data' in command && 'execute' in command) {
-      commands.push(command.data.toJSON());
+      payloads.push(command.data.toJSON());
       commandsCollection.set(command.data.name, command);
       console.log(`[Startup] Comando encontrado: ${command.data.name}`);
     }
   }
+
+  return {
+    payloads,
+    collection: commandsCollection,
+  };
+}
+
+export async function syncGuildCommands(token: string, guild: Guild, commands: any[]): Promise<void> {
+  const rest = new REST({ version: '10' }).setToken(token);
+  await rest.put(Routes.applicationGuildCommands(CLIENT_ID, guild.id), {
+    body: commands,
+  });
+  console.log(`[Startup] ${commands.length} comandos sincronizados no servidor ${guild.name} (${guild.id}).`);
+}
+
+async function syncConnectedGuilds(token: string, client: Client, commands: any[]): Promise<void> {
+  if (!REGISTER_GUILD_COMMANDS) return;
+
+  for (const guild of client.guilds.cache.values()) {
+    await syncGuildCommands(token, guild, commands);
+  }
+}
+
+export async function deployCommandsAuto(token: string, client?: Client): Promise<Collection<string, any>> {
+  const loadedCommands = loadCommands();
+  const commands = loadedCommands.payloads;
 
   console.log(`[Startup] ${commands.length} comandos encontrados. Registrando comandos ${COMMAND_SCOPE === 'guild' ? `no servidor ${GUILD_ID}` : 'globais'}...`);
 
@@ -151,7 +183,12 @@ export async function deployCommandsAuto(token: string): Promise<Collection<stri
   });
 
   console.log(`[Startup] ${commands.length} comandos ${COMMAND_SCOPE === 'guild' ? 'do servidor' : 'globais'} registrados com sucesso!`);
-  return commandsCollection;
+
+  if (COMMAND_SCOPE === 'global' && client) {
+    await syncConnectedGuilds(token, client, commands);
+  }
+
+  return loadedCommands.collection;
 }
 
 export async function seedPools(): Promise<void> {
