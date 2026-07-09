@@ -84,7 +84,7 @@ async function loginToDiscord(token: string, timeoutMs = 120000): Promise<void> 
   let timeoutId: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(() => {
-      reject(new Error(`Timeout em client.login apos ${timeoutMs}ms. Verifique conectividade do Render com o Gateway do Discord e se o token pertence ao bot convidado.`));
+      reject(new Error(`Timeout em client.login apos ${timeoutMs}ms. Verifique conectividade com o Gateway do Discord e se o token pertence ao bot convidado.`));
     }, timeoutMs);
   });
 
@@ -155,24 +155,21 @@ client.on(Events.InteractionCreate, async interaction => {
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
-  startHealthServer();
+  if (process.env.ENABLE_HTTP_SERVER === 'true' || process.env.PORT) {
+    startHealthServer();
+  }
+
   loadEvents();
 
   const token = getDiscordToken();
   if (!token) {
-    console.error('[Dark Bot] DISCORD_TOKEN nao configurado. No Render, defina em Environment Variables.');
+    console.error('[Dark Bot] DISCORD_TOKEN nao configurado. Defina a variavel no painel da hospedagem.');
     process.exit(1);
   }
 
   const tokenError = getDiscordTokenValidationError(token);
   if (tokenError) {
     console.error(`[Dark Bot] ${tokenError}`);
-    process.exit(1);
-  }
-
-  // Verifica DATABASE_URL antes de tentar seed
-  if (!process.env.DATABASE_URL) {
-    console.error('[Dark Bot] DATABASE_URL nao configurada.');
     process.exit(1);
   }
 
