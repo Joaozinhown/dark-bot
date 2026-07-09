@@ -47,7 +47,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const cargo = await interaction.guild!.roles.create({
     name: nomeTime,
-    color,
+    colors: { primaryColor: color },
     reason: `Cargo de time criado por ${interaction.user.displayName}`,
   });
 
