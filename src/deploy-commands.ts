@@ -310,15 +310,19 @@ async function deployCommands() {
 
     const clientId = process.env.CLIENT_ID!;
     const guildId = process.env.GUILD_ID!;
+    const commandScope = process.env.COMMAND_SCOPE === 'guild' ? 'guild' : 'global';
     const rest = new REST({ version: '10' }).setToken(token);
 
     const data = commands.map(command => command.toJSON());
+    const route = commandScope === 'guild'
+      ? Routes.applicationGuildCommands(clientId, guildId)
+      : Routes.applicationCommands(clientId);
 
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+    await rest.put(route, {
       body: data,
     });
 
-    console.log(`[Deploy] ${commands.length} comandos registrados com sucesso!`);
+    console.log(`[Deploy] ${commands.length} comandos ${commandScope === 'guild' ? 'do servidor' : 'globais'} registrados com sucesso!`);
   } catch (error) {
     console.error('[Deploy] Erro ao registrar comandos:', error);
     process.exit(1);

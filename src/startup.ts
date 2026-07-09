@@ -6,6 +6,7 @@ import prisma from './database/client';
 
 const GUILD_ID = process.env.GUILD_ID!;
 const CLIENT_ID = process.env.CLIENT_ID!;
+const COMMAND_SCOPE = process.env.COMMAND_SCOPE === 'guild' ? 'guild' : 'global';
 
 const INITIAL_POOLS = [
   {
@@ -134,15 +135,18 @@ export async function deployCommandsAuto(token: string): Promise<Collection<stri
     }
   }
 
-  console.log(`[Startup] ${commands.length} comandos encontrados. Registrando no Discord...`);
+  console.log(`[Startup] ${commands.length} comandos encontrados. Registrando comandos ${COMMAND_SCOPE === 'guild' ? `no servidor ${GUILD_ID}` : 'globais'}...`);
 
   const rest = new REST({ version: '10' }).setToken(token);
+  const route = COMMAND_SCOPE === 'guild'
+    ? Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID)
+    : Routes.applicationCommands(CLIENT_ID);
 
-  await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+  await rest.put(route, {
     body: commands,
   });
 
-  console.log(`[Startup] ${commands.length} comandos registrados com sucesso!`);
+  console.log(`[Startup] ${commands.length} comandos ${COMMAND_SCOPE === 'guild' ? 'do servidor' : 'globais'} registrados com sucesso!`);
   return commandsCollection;
 }
 
