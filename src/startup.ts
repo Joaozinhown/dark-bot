@@ -6,8 +6,9 @@ import prisma from './database/client';
 
 const GUILD_ID = process.env.GUILD_ID!;
 const CLIENT_ID = process.env.CLIENT_ID!;
-const COMMAND_SCOPE = process.env.COMMAND_SCOPE === 'guild' ? 'guild' : 'global';
 const REGISTER_GUILD_COMMANDS = process.env.REGISTER_GUILD_COMMANDS !== 'false';
+const REGISTER_GLOBAL_COMMANDS = process.env.REGISTER_GLOBAL_COMMANDS === 'true';
+const CLEAR_GLOBAL_COMMANDS = process.env.CLEAR_GLOBAL_COMMANDS !== 'false';
 
 interface LoadedCommands {
   payloads: any[];
@@ -171,21 +172,29 @@ export async function deployCommandsAuto(token: string, client?: Client): Promis
   const loadedCommands = loadCommands();
   const commands = loadedCommands.payloads;
 
-  console.log(`[Startup] ${commands.length} comandos encontrados. Registrando comandos ${COMMAND_SCOPE === 'guild' ? `no servidor ${GUILD_ID}` : 'globais'}...`);
-
   const rest = new REST({ version: '10' }).setToken(token);
-  const route = COMMAND_SCOPE === 'guild'
-    ? Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID)
-    : Routes.applicationCommands(CLIENT_ID);
 
-  await rest.put(route, {
-    body: commands,
-  });
+  if (REGISTER_GLOBAL_COMMANDS) {
+    console.log(`[Startup] ${commands.length} comandos encontrados. Registrando comandos globais...`);
+    await rest.put(Routes.applicationCommands(CLIENT_ID), {
+      body: commands,
+    });
+    console.log(`[Startup] ${commands.length} comandos globais registrados com sucesso!`);
+  } else if (CLEAR_GLOBAL_COMMANDS) {
+    console.log('[Startup] Limpando comandos globais para evitar duplicidade no Discord...');
+    await rest.put(Routes.applicationCommands(CLIENT_ID), {
+      body: [],
+    });
+    console.log('[Startup] Comandos globais removidos com sucesso.');
+  }
 
-  console.log(`[Startup] ${commands.length} comandos ${COMMAND_SCOPE === 'guild' ? 'do servidor' : 'globais'} registrados com sucesso!`);
-
-  if (COMMAND_SCOPE === 'global' && client) {
+  if (client) {
     await syncConnectedGuilds(token, client, commands);
+  } else if (GUILD_ID) {
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: commands,
+    });
+    console.log(`[Startup] ${commands.length} comandos sincronizados no servidor ${GUILD_ID}.`);
   }
 
   return loadedCommands.collection;

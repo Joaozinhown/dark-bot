@@ -26,7 +26,7 @@ async function deployCommands() {
     }
 
     const guildId = process.env.GUILD_ID;
-    const commandScope = process.env.COMMAND_SCOPE === 'guild' ? 'guild' : 'global';
+    const commandScope = process.env.COMMAND_SCOPE === 'global' ? 'global' : 'guild';
     if (commandScope === 'guild' && !guildId) {
       throw new Error('GUILD_ID nao configurado para COMMAND_SCOPE=guild.');
     }
