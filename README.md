@@ -2,7 +2,6 @@
   <img src="https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp" alt="DTA Logo" width="200"/>
 </p>
 
-<p align="center"><img src="https://img.shields.io/badge/Discord.js-v14-5865F2?logo=discord&logoColor=white" alt="Discord.js"/> <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/> <img src="https://img.shields.io/badge/Prisma-6.x-2D3748?logo=prisma&logoColor=white" alt="Prisma"/> <img src="https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white" alt="Node.js"/></p>
 
 <h1 align="center">Dark Bot</h1>
 
