@@ -7,7 +7,7 @@ import prisma from '../database/client';
 import { COLORS } from '../config';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
 
-const DTA_LOGO = 'https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp';
+const DTA_LOGO = 'https://pxdrop.online/raw/d9fv0fmhv1ts73baugmg?file=queens-trials-logo.png';
 
 export const data = new SlashCommandBuilder()
   .setName('gerenciar-pool')

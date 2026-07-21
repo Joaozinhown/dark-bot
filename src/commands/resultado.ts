@@ -72,6 +72,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     ...confronto,
     vencedor: vencedorTime,
     formato: confronto.formato as PoolFormato,
+    primeiroKiller: confronto.primeiroKiller as 'A' | 'B' | null,
   };
 
   const embed = createResultadoEmbed(confrontoData, vencedor.name);

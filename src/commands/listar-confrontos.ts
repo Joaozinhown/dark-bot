@@ -30,6 +30,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     ...c,
     formato: c.formato as PoolFormato,
     vencedor: c.vencedor as 'A' | 'B' | null,
+    primeiroKiller: c.primeiroKiller as 'A' | 'B' | null,
   }));
 
   const embed = createListarConfrontosEmbed(confrontosData);

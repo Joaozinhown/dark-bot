@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp" alt="DTA Logo" width="200"/>
+  <img src="https://pxdrop.online/raw/d9fv0fmhv1ts73baugmg?file=queens-trials-logo.png" alt="DTA Logo" width="200"/>
 </p>
 
 <h1 align="center">Dark Bot</h1>

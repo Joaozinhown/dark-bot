@@ -11,7 +11,13 @@ import http from 'http';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
-import { deployCommandsAuto, seedPools, ensureDatabase, syncGuildCommands } from './startup';
+import {
+  deployCommandsAuto,
+  seedPools,
+  ensureDatabase,
+  syncGuildCommands,
+  syncPresetPoolsForGuild,
+} from './startup';
 import { createErrorEmbed } from './utils/embeds';
 import { hasBotAdminPermission } from './utils/permissions';
 
@@ -192,6 +198,7 @@ client.on(Events.GuildCreate, async guild => {
   if (!token || commandPayloads.length === 0) return;
 
   try {
+    await syncPresetPoolsForGuild(guild.id);
     await syncGuildCommands(token, guild, commandPayloads);
   } catch (error) {
     console.error(`[Startup] Erro ao sincronizar comandos no servidor ${guild.id}:`, error);
@@ -222,10 +229,9 @@ async function main() {
   // Sincroniza schema do banco (cria tabelas se nao existirem)
   ensureDatabase();
 
-  // Semeia pools caso o banco esteja vazio
-  await seedPools();
-
   await connectDiscordWithRetry(token);
+
+  await seedPools(Array.from(client.guilds.cache.keys()));
 
   // Registra comandos apos login (pode demorar)
   client.commands = await deployCommandsAuto(token, client);

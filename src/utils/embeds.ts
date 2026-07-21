@@ -1,8 +1,9 @@
 import { EmbedBuilder, Colors } from 'discord.js';
 import { COLORS } from '../config';
 import { ConfrontoData, PoolFormato } from '../types/index';
+import { SetAssignment } from '../systems/veto-rules';
 
-const DTA_LOGO = 'https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp';
+const DTA_LOGO = 'https://pxdrop.online/raw/d9fv0fmhv1ts73baugmg?file=queens-trials-logo.png';
 
 export function createConfrontoEmbed(
   confronto: ConfrontoData,
@@ -22,9 +23,10 @@ export function createConfrontoEmbed(
         '',
         `**Pool:** Pool ${poolNum} — ${formato}`,
         `**Formato:** Melhor de ${formato === 'MD3' ? '3' : '5'}`,
+        `**Sorteio:** ${confronto.primeiroKiller === 'A' ? timeAName : timeBName} comeca o veto e joga de Killer no Set 1`,
         '',
         '---',
-        '**INICIANDO VETO DE MAPAS — SET 1**',
+        '**INICIANDO VETO DE KILLERS**',
       ].join('\n'),
     )
     .setThumbnail(DTA_LOGO)
@@ -33,31 +35,25 @@ export function createConfrontoEmbed(
 }
 
 export function createVetoEmbed(
-  tipo: 'mapa' | 'killer',
-  set: number,
-  vezDe: string,
+  sets: number,
   itensRestantes: string[],
   timeName: string,
 ): EmbedBuilder {
-  const title = tipo === 'mapa'
-    ? `VETO DE MAPAS — SET ${set}`
-    : `VETO DE KILLERS — SET ${set}`;
-
-  const itemLabel = tipo === 'mapa' ? 'Mapas' : 'Killers';
   const preview = itensRestantes
     .slice(0, 12)
     .map((item, index) => `**${index + 1}.** ${item}`)
     .join('\n');
 
   return new EmbedBuilder()
-    .setTitle(title)
+    .setTitle('VETO DE KILLERS')
     .setColor(COLORS.accent as any)
     .setDescription(
       [
         `**Vez de:** ${timeName}`,
         `**Restantes:** ${itensRestantes.length}`,
+        `**Bans restantes:** ${itensRestantes.length - sets}`,
         '',
-        `**${itemLabel} disponiveis:**`,
+        '**Killers disponiveis:**',
         preview,
         itensRestantes.length > 12 ? `\n...e mais ${itensRestantes.length - 12}` : '',
         '',
@@ -70,30 +66,57 @@ export function createVetoEmbed(
 }
 
 export function createBanEmbed(
-  tipo: 'mapa' | 'killer',
-  set: number,
   timeName: string,
   itemBanido: string,
   proximoTimeName: string,
-  proximoItem: string,
+  bansRestantes: number,
 ): EmbedBuilder {
-  const title = tipo === 'mapa'
-    ? `MAPA BANIDO — SET ${set}`
-    : `KILLER BANIDO — SET ${set}`;
+  const nextStep = bansRestantes > 0
+    ? [
+      `**Vez de:** ${proximoTimeName}`,
+      `**Bans restantes:** ${bansRestantes}`,
+      '',
+      'Aguardando proxima escolha no menu.',
+    ]
+    : ['Veto concluido. Preparando os sets...'];
 
   return new EmbedBuilder()
-    .setTitle(title)
+    .setTitle('KILLER BANIDO')
     .setColor(COLORS.gold as any)
     .setDescription(
       [
         `**${timeName} baniu:** ${itemBanido}`,
         '',
-        `**Vez de:** ${proximoTimeName}`,
-        `**Proximo restante:** ${proximoItem}`,
-        '',
-        'Aguardando proxima escolha no menu.',
+        ...nextStep,
       ].join('\n'),
     )
+    .setThumbnail(DTA_LOGO)
+    .setFooter({ text: 'Dark Trials Arena' })
+    .setTimestamp();
+}
+
+export function createSetsReadyEmbed(
+  assignments: SetAssignment[],
+  timeAName: string,
+  timeBName: string,
+): EmbedBuilder {
+  const sets = assignments.flatMap(assignment => [
+    `**SET ${assignment.numero}**`,
+    `Mapa: ${assignment.mapa}`,
+    `Killer: ${assignment.killer}`,
+    `Time Killer: ${assignment.killerTime === 'A' ? timeAName : timeBName}`,
+    '',
+  ]);
+
+  return new EmbedBuilder()
+    .setTitle('SETS DEFINIDOS')
+    .setColor(COLORS.gold as any)
+    .setDescription([
+      `**${timeAName}** x **${timeBName}**`,
+      '',
+      ...sets,
+      'O confronto pode comecar.',
+    ].join('\n'))
     .setThumbnail(DTA_LOGO)
     .setFooter({ text: 'Dark Trials Arena' })
     .setTimestamp();

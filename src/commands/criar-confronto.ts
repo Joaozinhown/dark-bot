@@ -4,11 +4,12 @@ import {
   TextChannel,
 } from 'discord.js';
 import prisma from '../database/client';
-import { getPoolById, PoolFormato } from '../config';
+import { getPoolById, getSetsMaximos, PoolFormato } from '../config';
 import { createTeamVoiceChannel, createConfrontoTextChannel } from '../utils/channels';
 import { createConfrontoEmbed, createErrorEmbed } from '../utils/embeds';
 import { startVeto } from '../systems/veto';
 import { ConfrontoData } from '../types/index';
+import { drawStartingTeam } from '../systems/veto-rules';
 
 export const data = new SlashCommandBuilder()
   .setName('criar-confronto')
@@ -48,17 +49,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  if (poolConfig.mapas.length < 2) {
+  const setsMaximos = getSetsMaximos(poolConfig.formato);
+
+  if (poolConfig.mapas.length !== setsMaximos) {
     await interaction.reply({
-      embeds: [createErrorEmbed('A pool precisa ter pelo menos 2 mapas para o sistema de veto funcionar.')],
+      embeds: [createErrorEmbed(`A pool ${poolConfig.formato} precisa ter exatamente ${setsMaximos} mapas presetados.`)],
       flags: 64,
     });
     return;
   }
 
-  if (poolConfig.killers.length < 2) {
+  if (poolConfig.killers.length <= setsMaximos) {
     await interaction.reply({
-      embeds: [createErrorEmbed('A pool precisa ter pelo menos 2 killers para o sistema de veto funcionar.')],
+      embeds: [createErrorEmbed(`A pool precisa ter mais de ${setsMaximos} killers para permitir bans.`)],
       flags: 64,
     });
     return;
@@ -74,6 +77,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   await interaction.deferReply();
 
+  const primeiroKiller = drawStartingTeam();
+
   const confronto = await prisma.confronto.create({
     data: {
       guildId: interaction.guildId!,
@@ -81,6 +86,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       formato: poolConfig.formato,
       timeARoleId: timeA.id,
       timeBRoleId: timeB.id,
+      primeiroKiller,
       status: 'veto',
     },
   });
@@ -137,6 +143,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     channelId,
     formato: confronto.formato as PoolFormato,
     vencedor: confronto.vencedor as 'A' | 'B' | null,
+    primeiroKiller: confronto.primeiroKiller as 'A' | 'B' | null,
   };
 
   const embed = createConfrontoEmbed(confrontoData, timeA.name, timeB.name);
@@ -145,5 +152,5 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   await interaction.editReply({ embeds: [embed] });
 
-  await startVeto(interaction.guild!, confronto.id, poolConfig, 1, textChannel);
+  await startVeto(interaction.guild!, confronto.id, poolConfig, primeiroKiller, textChannel);
 }

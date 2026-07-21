@@ -1,39 +1,36 @@
 import {
-  Guild,
-  TextChannel,
   ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ButtonInteraction,
+  Guild,
   GuildMember,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
+  TextChannel,
 } from 'discord.js';
 import prisma from '../database/client';
 import { PoolConfig, VetoVez } from '../types/index';
-import { createVetoEmbed, createBanEmbed, createErrorEmbed } from '../utils/embeds';
-import { COLORS } from '../config';
-
-const DTA_LOGO = 'https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp';
+import {
+  createBanEmbed,
+  createErrorEmbed,
+  createSetsReadyEmbed,
+  createVetoEmbed,
+} from '../utils/embeds';
+import { createSetAssignments } from './veto-rules';
 
 export async function startVeto(
   guild: Guild,
   confrontoId: number,
   poolConfig: PoolConfig,
-  set: number,
+  primeiroKiller: VetoVez,
   canalTexto: TextChannel,
 ): Promise<void> {
-  const mapas = [...poolConfig.mapas];
-  const killers = [...poolConfig.killers];
-
   await prisma.vetoState.create({
     data: {
       confrontoId,
-      tipo: 'mapa',
-      set,
-      vezDe: 'A',
-      mapasRestantes: JSON.stringify(mapas),
-      killersRestantes: JSON.stringify(killers),
+      tipo: 'killer',
+      set: 1,
+      vezDe: primeiroKiller,
+      mapasRestantes: JSON.stringify(poolConfig.mapas),
+      killersRestantes: JSON.stringify(poolConfig.killers),
     },
   });
 
@@ -48,52 +45,38 @@ async function sendVetoStep(
   const vetoState = await prisma.vetoState.findUnique({
     where: { confrontoId },
   });
-
   if (!vetoState) return;
 
   const confronto = await prisma.confronto.findUnique({
     where: { id: confrontoId },
   });
-
   if (!confronto) return;
 
-  const timeARole = await guild.roles.fetch(confronto.timeARoleId);
-  const timeBRole = await guild.roles.fetch(confronto.timeBRoleId);
-
-  if (!timeARole || !timeBRole) return;
-
-  const vezRole = vetoState.vezDe === 'A' ? timeARole : timeBRole;
-  const itensRestantes = vetoState.tipo === 'mapa'
-    ? JSON.parse(vetoState.mapasRestantes) as string[]
-    : JSON.parse(vetoState.killersRestantes) as string[];
-
-  if (itensRestantes.length <= 1) {
+  const mapas = JSON.parse(vetoState.mapasRestantes) as string[];
+  const killers = JSON.parse(vetoState.killersRestantes) as string[];
+  if (killers.length <= mapas.length) {
     await finalizeVeto(guild, confrontoId, canalTexto);
     return;
   }
 
-  const embed = createVetoEmbed(
-    vetoState.tipo as 'mapa' | 'killer',
-    vetoState.set,
-    vezRole.name,
-    itensRestantes,
-    vezRole.name,
-  );
+  const timeARole = await guild.roles.fetch(confronto.timeARoleId);
+  const timeBRole = await guild.roles.fetch(confronto.timeBRoleId);
+  if (!timeARole || !timeBRole) return;
 
+  const vezRole = vetoState.vezDe === 'A' ? timeARole : timeBRole;
+  const embed = createVetoEmbed(mapas.length, killers, vezRole.name);
   const banSelect = new StringSelectMenuBuilder()
-    .setCustomId(`ban-select:${confrontoId}:${vetoState.tipo}`)
-    .setPlaceholder(`Escolha ${vetoState.tipo === 'mapa' ? 'um mapa' : 'um killer'} para banir`)
+    .setCustomId(`killer-ban:${confrontoId}`)
+    .setPlaceholder('Escolha um killer para banir')
     .addOptions(
-      itensRestantes.slice(0, 25).map((item, index) => ({
-        label: item.slice(0, 100),
-        value: item,
-        description: `${index + 1} de ${itensRestantes.length}`,
+      killers.map((killer, index) => ({
+        label: killer.slice(0, 100),
+        value: killer,
+        description: `${index + 1} de ${killers.length}`,
       })),
     );
-
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(banSelect);
-
-  const msg = await canalTexto.send({
+  const message = await canalTexto.send({
     content: `<@&${vezRole.id}>`,
     embeds: [embed],
     components: [row],
@@ -101,39 +84,20 @@ async function sendVetoStep(
 
   await prisma.vetoState.update({
     where: { confrontoId },
-    data: { messageId: msg.id },
+    data: { messageId: message.id },
   });
-}
-
-export async function handleBanButton(
-  interaction: ButtonInteraction,
-  confrontoId: number,
-  tipo: string,
-): Promise<void> {
-  await applyBan(interaction, confrontoId, tipo);
 }
 
 export async function handleBanSelection(
   interaction: StringSelectMenuInteraction,
   confrontoId: number,
-  tipo: string,
-): Promise<void> {
-  await applyBan(interaction, confrontoId, tipo, interaction.values[0]);
-}
-
-async function applyBan(
-  interaction: ButtonInteraction | StringSelectMenuInteraction,
-  confrontoId: number,
-  tipo: string,
-  selectedItem?: string,
 ): Promise<void> {
   const vetoState = await prisma.vetoState.findUnique({
     where: { confrontoId },
   });
-
-  if (!vetoState) {
+  if (!vetoState || vetoState.tipo !== 'killer') {
     await interaction.reply({
-      embeds: [createErrorEmbed('Estado de veto nao encontrado.')],
+      embeds: [createErrorEmbed('Estado de veto nao encontrado. Use a mensagem mais recente.')],
       flags: 64,
     });
     return;
@@ -142,7 +106,6 @@ async function applyBan(
   const confronto = await prisma.confronto.findUnique({
     where: { id: confrontoId },
   });
-
   if (!confronto) {
     await interaction.reply({
       embeds: [createErrorEmbed('Confronto nao encontrado.')],
@@ -151,17 +114,8 @@ async function applyBan(
     return;
   }
 
-  if (tipo !== vetoState.tipo) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Esta etapa de veto ja mudou. Use a mensagem mais recente.')],
-      flags: 64,
-    });
-    return;
-  }
-
   const timeARole = await interaction.guild!.roles.fetch(confronto.timeARoleId);
   const timeBRole = await interaction.guild!.roles.fetch(confronto.timeBRoleId);
-
   if (!timeARole || !timeBRole) {
     await interaction.reply({
       embeds: [createErrorEmbed('Time nao encontrado.')],
@@ -171,9 +125,8 @@ async function applyBan(
   }
 
   const vezRoleId = vetoState.vezDe === 'A' ? timeARole.id : timeBRole.id;
-
   const member = interaction.member as GuildMember | null;
-  if (!member || !member.roles.cache.has(vezRoleId)) {
+  if (!member?.roles.cache.has(vezRoleId)) {
     await interaction.reply({
       embeds: [createErrorEmbed('Nao e a vez do seu time.')],
       flags: 64,
@@ -181,61 +134,42 @@ async function applyBan(
     return;
   }
 
-  await interaction.deferUpdate();
-
-  const itensRestantes = vetoState.tipo === 'mapa'
-    ? JSON.parse(vetoState.mapasRestantes) as string[]
-    : JSON.parse(vetoState.killersRestantes) as string[];
-
-  const itemBanido = selectedItem ?? itensRestantes[0];
-  const itemIndex = itensRestantes.indexOf(itemBanido);
-
-  if (itemIndex < 0) {
-    await interaction.followUp({
-      embeds: [createErrorEmbed('Item de veto nao encontrado. Use a mensagem mais recente.')],
+  const killers = JSON.parse(vetoState.killersRestantes) as string[];
+  const mapas = JSON.parse(vetoState.mapasRestantes) as string[];
+  const killerBanido = interaction.values[0];
+  const killerIndex = killers.indexOf(killerBanido);
+  if (killerIndex < 0 || killers.length <= mapas.length) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Killer indisponivel. Use a mensagem mais recente.')],
       flags: 64,
     });
     return;
   }
 
-  itensRestantes.splice(itemIndex, 1);
+  await interaction.deferUpdate();
 
-  const proximoTimeName = vetoState.vezDe === 'A' ? timeBRole.name : timeARole.name;
-  const proximoItem = itensRestantes[0] || 'Definido';
-
-  const embed = createBanEmbed(
-    vetoState.tipo as 'mapa' | 'killer',
-    vetoState.set,
-    vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name,
-    itemBanido,
-    proximoTimeName,
-    proximoItem,
-  );
+  const killersRestantes = killers.filter((_, index) => index !== killerIndex);
+  const proximaVez: VetoVez = vetoState.vezDe === 'A' ? 'B' : 'A';
+  const proximoTimeName = proximaVez === 'A' ? timeARole.name : timeBRole.name;
+  const bansRestantes = killersRestantes.length - mapas.length;
 
   await interaction.editReply({
-    embeds: [embed],
+    embeds: [createBanEmbed(
+      vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name,
+      killerBanido,
+      proximoTimeName,
+      bansRestantes,
+    )],
     components: [],
   });
 
-  const proximaVez: VetoVez = vetoState.vezDe === 'A' ? 'B' : 'A';
-
-  if (vetoState.tipo === 'mapa') {
-    await prisma.vetoState.update({
-      where: { confrontoId },
-      data: {
-        mapasRestantes: JSON.stringify(itensRestantes),
-        vezDe: proximaVez,
-      },
-    });
-  } else {
-    await prisma.vetoState.update({
-      where: { confrontoId },
-      data: {
-        killersRestantes: JSON.stringify(itensRestantes),
-        vezDe: proximaVez,
-      },
-    });
-  }
+  await prisma.vetoState.update({
+    where: { confrontoId },
+    data: {
+      killersRestantes: JSON.stringify(killersRestantes),
+      vezDe: proximaVez,
+    },
+  });
 
   await sendVetoStep(interaction.guild!, confrontoId, interaction.channel as TextChannel);
 }
@@ -248,82 +182,42 @@ async function finalizeVeto(
   const vetoState = await prisma.vetoState.findUnique({
     where: { confrontoId },
   });
+  const confronto = await prisma.confronto.findUnique({
+    where: { id: confrontoId },
+  });
+  if (!vetoState || !confronto?.primeiroKiller) return;
 
-  if (!vetoState) return;
+  const timeARole = await guild.roles.fetch(confronto.timeARoleId);
+  const timeBRole = await guild.roles.fetch(confronto.timeBRoleId);
+  if (!timeARole || !timeBRole) return;
 
-  const itensRestantes = vetoState.tipo === 'mapa'
-    ? JSON.parse(vetoState.mapasRestantes) as string[]
-    : JSON.parse(vetoState.killersRestantes) as string[];
+  const mapas = JSON.parse(vetoState.mapasRestantes) as string[];
+  const killers = JSON.parse(vetoState.killersRestantes) as string[];
+  const assignments = createSetAssignments(
+    mapas,
+    killers,
+    confronto.primeiroKiller as VetoVez,
+  );
 
-  const itemEscolhido = itensRestantes[0];
-
-  if (vetoState.tipo === 'mapa') {
-    await prisma.vetoState.update({
-      where: { confrontoId },
-      data: {
-        mapaEscolhido: itemEscolhido,
-        tipo: 'killer',
-        vezDe: 'A',
-      },
-    });
-
-    await canalTexto.send({
-      embeds: [
-        {
-          title: `MAPA DEFINIDO — SET ${vetoState.set}`,
-          color: parseInt(COLORS.success.replace('#', ''), 16),
-          description: `**Mapa:** ${itemEscolhido}\n\nIniciando veto de killers...`,
-          thumbnail: { url: DTA_LOGO },
-          footer: { text: 'Dark Trials Arena' },
-        },
-      ],
-    });
-
-    await sendVetoStep(guild, confrontoId, canalTexto);
-  } else {
-    await prisma.vetoState.update({
-      where: { confrontoId },
-      data: {
-        killerEscolhido: itemEscolhido,
-      },
-    });
-
-    await prisma.set.create({
-      data: {
+  await prisma.$transaction([
+    prisma.set.deleteMany({ where: { confrontoId } }),
+    prisma.set.createMany({
+      data: assignments.map(assignment => ({
         confrontoId,
-        numero: vetoState.set,
-        mapaUsado: vetoState.mapaEscolhido,
-        killerUsado: itemEscolhido,
-      },
-    });
-
-    await prisma.confronto.update({
+        numero: assignment.numero,
+        mapaUsado: assignment.mapa,
+        killerUsado: assignment.killer,
+        killerTime: assignment.killerTime,
+      })),
+    }),
+    prisma.confronto.update({
       where: { id: confrontoId },
-      data: {
-        status: 'em_andamento',
-        currentSet: vetoState.set,
-      },
-    });
+      data: { status: 'em_andamento', currentSet: 1 },
+    }),
+    prisma.vetoState.delete({ where: { confrontoId } }),
+  ]);
 
-    await canalTexto.send({
-      embeds: [
-        {
-          title: `SET ${vetoState.set} PRONTO`,
-          color: parseInt(COLORS.gold.replace('#', ''), 16),
-          description: [
-            `**Mapa:** ${vetoState.mapaEscolhido}`,
-            `**Killer:** ${itemEscolhido}`,
-            '',
-            'Os times podem comecar a jogar!',
-          ].join('\n'),
-          thumbnail: { url: DTA_LOGO },
-          footer: { text: 'Dark Trials Arena' },
-        },
-      ],
-    });
-
-    await prisma.vetoState.delete({
-      where: { confrontoId },
-    });
-  }
+  await canalTexto.send({
+    embeds: [createSetsReadyEmbed(assignments, timeARole.name, timeBRole.name)],
+  });
 }
