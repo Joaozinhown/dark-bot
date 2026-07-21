@@ -46,3 +46,14 @@ test('each preset pool requires exactly six killer bans', () => {
     assert.equal(pool.killers.length - pool.mapas.length, 6);
   }
 });
+
+test('exposes the three tournament pools in order', () => {
+  assert.deepEqual(
+    POOL_PRESETS.map(pool => [pool.nome, pool.formato]),
+    [
+      ['Queens Trials 1', 'MD3'],
+      ['Queens Trials 2', 'MD5'],
+      ['Queens Trials 3', 'MD5'],
+    ],
+  );
+});

@@ -157,7 +157,7 @@ export async function syncPresetPoolsForGuild(guildId: string): Promise<void> {
     }
   });
 
-  console.log(`[Startup] 2 pools presetadas sincronizadas no servidor ${guildId}.`);
+  console.log(`[Startup] ${POOL_PRESETS.length} pools presetadas sincronizadas no servidor ${guildId}.`);
 }
 
 export async function seedPools(guildIds: string[] = []): Promise<void> {
