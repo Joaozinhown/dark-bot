@@ -3,6 +3,7 @@ import { readdirSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import prisma from './database/client';
+import { POOL_PRESETS } from './data/pool-presets';
 
 const GUILD_ID = process.env.GUILD_ID!;
 const CLIENT_ID = process.env.CLIENT_ID!;
@@ -14,97 +15,6 @@ interface LoadedCommands {
   payloads: any[];
   collection: Collection<string, any>;
 }
-
-const INITIAL_POOLS = [
-  {
-    nome: 'Queens Trials 1',
-    formato: 'MD3',
-    mapas: [
-      "Azarov's Resting Place",
-      'Shelter Woods',
-      'Ormond Lake Mine',
-    ],
-    killers: [
-      'Oni',
-      'Nurse',
-      'Spirit',
-      'Krasue',
-      'Artist',
-      'Ghoul',
-      'Lich',
-      'Plague',
-      'Singularity',
-    ],
-  },
-  {
-    nome: 'Queens Trials 2',
-    formato: 'MD3',
-    mapas: [
-      'Groaning Storehouse',
-      "Wrecker's Yard",
-      'Residencia da Familia (Yamaoka)',
-    ],
-    killers: [
-      'The Slasher',
-      'Animatronic',
-      'Mastermind',
-      'Deathslinger',
-      'Nightmare',
-      'The Executioner',
-      'Unknown',
-      'Nemesis',
-      'Houndmaster',
-    ],
-  },
-  {
-    nome: 'Queens Trials 3',
-    formato: 'MD5',
-    mapas: [
-      'Wretched Shop',
-      'Midwich Elementary School',
-      'Suffocation Pit',
-      'Ironworks of Misery',
-      "Thompson's House",
-    ],
-    killers: [
-      'Demogorgon',
-      'Dredge',
-      'Onryo',
-      'The First',
-      'Wraith',
-      'Hillbilly',
-      'Blight',
-      'Spirit',
-      'Pig',
-      'Knight',
-      'Legion',
-    ],
-  },
-  {
-    nome: 'Queens Trials 4',
-    formato: 'MD5',
-    mapas: [
-      'Dead Dawg Saloon',
-      'Coal Tower',
-      "Lery's Memorial Institute",
-      'Blood Lodge',
-      'Toba Landing',
-    ],
-    killers: [
-      'Clown',
-      'Good Guy',
-      'Cenobite',
-      'Ghost Face',
-      'Shape',
-      'Lich',
-      'Wraith',
-      'Dark Lord',
-      'Doctor',
-      'Krasue',
-      'The Slasher',
-    ],
-  },
-];
 
 export function ensureDatabase(): void {
   console.log(`[Startup] DATABASE_URL: ${process.env.DATABASE_URL}`);
@@ -200,47 +110,69 @@ export async function deployCommandsAuto(token: string, client?: Client): Promis
   return loadedCommands.collection;
 }
 
-export async function seedPools(): Promise<void> {
-  const poolCount = await prisma.pool.count();
-
-  if (poolCount > 0) {
-    console.log(`[Startup] ${poolCount} pools ja existem. Seed ignorado.`);
-    return;
-  }
-
-  console.log('[Startup] Nenhuma pool encontrada. Inserindo pools iniciais...');
-
-  for (const poolData of INITIAL_POOLS) {
-    const pool = await prisma.pool.create({
-      data: {
-        guildId: GUILD_ID,
-        nome: poolData.nome,
-        formato: poolData.formato,
-      },
+export async function syncPresetPoolsForGuild(guildId: string): Promise<void> {
+  await prisma.$transaction(async transaction => {
+    const existingPools = await transaction.pool.findMany({
+      where: { guildId },
+      orderBy: { id: 'asc' },
     });
 
-    for (let i = 0; i < poolData.mapas.length; i++) {
-      await prisma.poolMapa.create({
-        data: {
+    await transaction.pool.updateMany({
+      where: { guildId },
+      data: { ativa: false },
+    });
+
+    for (const preset of POOL_PRESETS) {
+      const existingPool = existingPools.find(pool => pool.nome === preset.nome);
+      const pool = existingPool
+        ? await transaction.pool.update({
+          where: { id: existingPool.id },
+          data: { formato: preset.formato, ativa: true },
+        })
+        : await transaction.pool.create({
+          data: {
+            guildId,
+            nome: preset.nome,
+            formato: preset.formato,
+          },
+        });
+
+      await transaction.poolMapa.deleteMany({ where: { poolId: pool.id } });
+      await transaction.poolKiller.deleteMany({ where: { poolId: pool.id } });
+
+      await transaction.poolMapa.createMany({
+        data: preset.mapas.map((nome, index) => ({
           poolId: pool.id,
-          nome: poolData.mapas[i],
-          ordem: i + 1,
-        },
+          nome,
+          ordem: index + 1,
+        })),
+      });
+      await transaction.poolKiller.createMany({
+        data: preset.killers.map((nome, index) => ({
+          poolId: pool.id,
+          nome,
+          ordem: index + 1,
+        })),
       });
     }
+  });
 
-    for (let i = 0; i < poolData.killers.length; i++) {
-      await prisma.poolKiller.create({
-        data: {
-          poolId: pool.id,
-          nome: poolData.killers[i],
-          ordem: i + 1,
-        },
-      });
-    }
+  console.log(`[Startup] 2 pools presetadas sincronizadas no servidor ${guildId}.`);
+}
 
-    console.log(`[Startup] Pool "${pool.nome}" criada com ${poolData.mapas.length} mapas e ${poolData.killers.length} killers.`);
+export async function seedPools(guildIds: string[] = []): Promise<void> {
+  const storedGuilds = await prisma.pool.findMany({
+    distinct: ['guildId'],
+    select: { guildId: true },
+  });
+  const allGuildIds = new Set([
+    ...storedGuilds.map(pool => pool.guildId),
+    ...guildIds,
+  ]);
+
+  if (GUILD_ID) allGuildIds.add(GUILD_ID);
+
+  for (const guildId of allGuildIds) {
+    await syncPresetPoolsForGuild(guildId);
   }
-
-  console.log('[Startup] Pools iniciais inseridas com sucesso!');
 }
