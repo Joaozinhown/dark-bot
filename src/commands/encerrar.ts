@@ -3,7 +3,7 @@ import {
   ChatInputCommandInteraction,
 } from 'discord.js';
 import prisma from '../database/client';
-import { deleteConfrontoChannels } from '../utils/channels';
+import { deleteConfrontoVoiceChannels } from '../utils/channels';
 import { createEncerramentoEmbed, createErrorEmbed, createSuccessEmbed } from '../utils/embeds';
 
 export const data = new SlashCommandBuilder()
@@ -20,18 +20,11 @@ export const data = new SlashCommandBuilder()
     option
       .setName('motivo')
       .setDescription('Motivo do encerramento'),
-  )
-  .addBooleanOption(option =>
-    option
-      .setName('apagar-chat')
-      .setDescription('Apagar canal de texto (padrao: false)')
-      .setRequired(false),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   const confrontoId = interaction.options.getInteger('confronto-id', true);
   const motivo = interaction.options.getString('motivo');
-  const apagarChat = interaction.options.getBoolean('apagar-chat') ?? false;
 
   const confronto = await prisma.confronto.findUnique({
     where: { id: confrontoId },
@@ -64,11 +57,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     },
   });
 
-  await deleteConfrontoChannels(
+  await deleteConfrontoVoiceChannels(
     interaction.guild!,
     confronto.vozTimeAId,
     confronto.vozTimeBId,
-    apagarChat ? confronto.channelId : null,
   );
 
   const embed = createEncerramentoEmbed(confrontoId, motivo ?? undefined);

@@ -5,7 +5,7 @@ import {
 } from 'discord.js';
 import prisma from '../database/client';
 import { getPoolById, getSetsMaximos, PoolFormato } from '../config';
-import { createTeamVoiceChannel, createConfrontoTextChannel } from '../utils/channels';
+import { createTeamVoiceChannel } from '../utils/channels';
 import { createConfrontoEmbed, createErrorEmbed } from '../utils/embeds';
 import { startVeto } from '../systems/veto';
 import { ConfrontoData } from '../types/index';
@@ -38,6 +38,16 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const poolId = interaction.options.getInteger('pool-id', true);
   const timeA = interaction.options.getRole('time-a', true);
   const timeB = interaction.options.getRole('time-b', true);
+
+  if (!(interaction.channel instanceof TextChannel)) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Use este comando em um canal de texto do confronto.')],
+      flags: 64,
+    });
+    return;
+  }
+
+  const textChannel = interaction.channel;
 
   const poolConfig = await getPoolById(poolId, interaction.guildId!);
 
@@ -105,49 +115,27 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     confronto.id,
   );
 
-  const channelId = await createConfrontoTextChannel(
-    interaction.guild!,
-    timeA.name,
-    timeB.name,
-    timeA.id,
-    timeB.id,
-    null,
-  );
-
   await prisma.confronto.update({
     where: { id: confronto.id },
     data: {
       vozTimeAId,
       vozTimeBId,
-      channelId,
+      channelId: textChannel.id,
     },
   });
-
-  const canalTexto = await interaction.guild!.channels.fetch(channelId);
-
-  if (!canalTexto?.isTextBased()) {
-    await interaction.editReply({
-      embeds: [createErrorEmbed('Erro ao criar canal de texto.')],
-    });
-    return;
-  }
-
-  const textChannel = canalTexto as TextChannel;
 
   const confrontoData: ConfrontoData = {
     ...confronto,
     pool: poolId,
     vozTimeAId,
     vozTimeBId,
-    channelId,
+    channelId: textChannel.id,
     formato: confronto.formato as PoolFormato,
     vencedor: confronto.vencedor as 'A' | 'B' | null,
     primeiroKiller: confronto.primeiroKiller as 'A' | 'B' | null,
   };
 
   const embed = createConfrontoEmbed(confrontoData, timeA.name, timeB.name);
-
-  await textChannel.send({ embeds: [embed] });
 
   await interaction.editReply({ embeds: [embed] });
 

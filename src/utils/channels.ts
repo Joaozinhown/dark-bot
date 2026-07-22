@@ -2,7 +2,6 @@ import {
   Guild,
   ChannelType,
   PermissionFlagsBits,
-  OverwriteResolvable,
 } from 'discord.js';
 
 export async function createTeamVoiceChannel(
@@ -32,73 +31,12 @@ export async function createTeamVoiceChannel(
   return channel.id;
 }
 
-export async function createConfrontoTextChannel(
-  guild: Guild,
-  timeAName: string,
-  timeBName: string,
-  timeARoleId: string,
-  timeBRoleId: string,
-  organizationRoleId: string | null,
-): Promise<string> {
-  const category = await getOrCreateCategory(guild, 'CONFRONTOS');
-
-  const permissionOverwrites: OverwriteResolvable[] = [
-    {
-      id: guild.id,
-      deny: [PermissionFlagsBits.ViewChannel],
-    },
-    {
-      id: timeARoleId,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-      ],
-    },
-    {
-      id: timeBRoleId,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-      ],
-    },
-  ];
-
-  if (organizationRoleId) {
-    permissionOverwrites.push({
-      id: organizationRoleId,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.ManageMessages,
-      ],
-    });
-  }
-
-  const channel = await guild.channels.create({
-    name: buildConfrontoChannelName(timeAName, timeBName),
-    type: ChannelType.GuildText,
-    parent: category.id,
-    permissionOverwrites,
-  });
-
-  return channel.id;
-}
-
-export function buildConfrontoChannelName(timeAName: string, timeBName: string): string {
-  const normalize = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, '-');
-  return `${normalize(timeAName)}-vs-${normalize(timeBName)}`;
-}
-
-export async function deleteConfrontoChannels(
+export async function deleteConfrontoVoiceChannels(
   guild: Guild,
   vozTimeAId: string | null,
   vozTimeBId: string | null,
-  channelId: string | null,
 ): Promise<void> {
-  const channelsToDelete = [vozTimeAId, vozTimeBId, channelId].filter(
+  const channelsToDelete = [vozTimeAId, vozTimeBId].filter(
     (id): id is string => id !== null,
   );
 

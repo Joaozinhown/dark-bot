@@ -6,7 +6,6 @@ import {
   getKillerTeamForSet,
 } from './veto-rules';
 import { POOL_PRESETS } from '../data/pool-presets';
-import { buildConfrontoChannelName } from '../utils/channels';
 
 test('draws each team from opposite halves of the random range', () => {
   assert.equal(drawStartingTeam(() => 0), 'A');
@@ -56,12 +55,5 @@ test('exposes the three tournament pools in order', () => {
       ['Queens Trials 2', 'MD5'],
       ['Queens Trials 3', 'MD5'],
     ],
-  );
-});
-
-test('builds confrontation channel names from team roles only', () => {
-  assert.equal(
-    buildConfrontoChannelName('Time 1', 'Time 2'),
-    'time-1-vs-time-2',
   );
 });
