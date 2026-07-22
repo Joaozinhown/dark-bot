@@ -5,7 +5,6 @@ import {
 } from 'discord.js';
 import prisma from '../database/client';
 import { getPoolById, getSetsMaximos, PoolFormato } from '../config';
-import { createTeamVoiceChannel } from '../utils/channels';
 import { createConfrontoEmbed, createErrorEmbed } from '../utils/embeds';
 import { startVeto } from '../systems/veto';
 import { ConfrontoData } from '../types/index';
@@ -101,25 +100,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     },
   });
 
-  const vozTimeAId = await createTeamVoiceChannel(
-    interaction.guild!,
-    timeA.name,
-    timeA.id,
-    confronto.id,
-  );
-
-  const vozTimeBId = await createTeamVoiceChannel(
-    interaction.guild!,
-    timeB.name,
-    timeB.id,
-    confronto.id,
-  );
-
   await prisma.confronto.update({
     where: { id: confronto.id },
     data: {
-      vozTimeAId,
-      vozTimeBId,
       channelId: textChannel.id,
     },
   });
@@ -127,8 +110,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const confrontoData: ConfrontoData = {
     ...confronto,
     pool: poolId,
-    vozTimeAId,
-    vozTimeBId,
     channelId: textChannel.id,
     formato: confronto.formato as PoolFormato,
     vencedor: confronto.vencedor as 'A' | 'B' | null,
