@@ -39,7 +39,6 @@ export async function createConfrontoTextChannel(
   timeARoleId: string,
   timeBRoleId: string,
   organizationRoleId: string | null,
-  confrontoId: number,
 ): Promise<string> {
   const category = await getOrCreateCategory(guild, 'CONFRONTOS');
 
@@ -79,13 +78,18 @@ export async function createConfrontoTextChannel(
   }
 
   const channel = await guild.channels.create({
-    name: `vs-${timeAName}-vs-${timeBName}-${confrontoId}`,
+    name: buildConfrontoChannelName(timeAName, timeBName),
     type: ChannelType.GuildText,
     parent: category.id,
     permissionOverwrites,
   });
 
   return channel.id;
+}
+
+export function buildConfrontoChannelName(timeAName: string, timeBName: string): string {
+  const normalize = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, '-');
+  return `${normalize(timeAName)}-vs-${normalize(timeBName)}`;
 }
 
 export async function deleteConfrontoChannels(

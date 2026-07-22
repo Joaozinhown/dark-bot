@@ -112,7 +112,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     timeA.id,
     timeB.id,
     null,
-    confronto.id,
   );
 
   await prisma.confronto.update({
