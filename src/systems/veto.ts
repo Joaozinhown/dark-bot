@@ -243,6 +243,7 @@ async function finalizeVeto(
   ]);
 
   await canalTexto.send({
+    content: `${timeARole} e ${timeBRole}, os sets foram definidos! Confiram a tabela abaixo:`,
     embeds: [createSetsReadyEmbed(assignments, timeARole.name, timeBRole.name)],
   });
 }

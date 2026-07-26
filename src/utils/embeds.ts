@@ -46,10 +46,11 @@ export function createVetoEmbed(
 
   const titleAction = action === 'pick' ? 'PICK DE KILLER' : 'BANIMENTO DE KILLER';
   const actionText = action === 'pick' ? 'escolha' : 'banimento';
+  const embedColor = action === 'pick' ? COLORS.success : COLORS.accent;
 
   return new EmbedBuilder()
     .setTitle(titleAction)
-    .setColor(COLORS.accent as any)
+    .setColor(embedColor as any)
     .setDescription(
       [
         `**Vez de:** ${timeName}`,
@@ -84,10 +85,11 @@ export function createBanEmbed(
 
   const title = action === 'pick' ? 'KILLER ESCOLHIDO' : 'KILLER BANIDO';
   const actVerb = action === 'pick' ? 'escolheu' : 'baniu';
+  const embedColor = action === 'pick' ? COLORS.success : COLORS.accent;
 
   return new EmbedBuilder()
     .setTitle(title)
-    .setColor(COLORS.gold as any)
+    .setColor(embedColor as any)
     .setDescription(
       [
         `**${timeName} ${actVerb}:** ${itemBanido}`,
@@ -109,7 +111,7 @@ export function createSetsReadyEmbed(
     `**SET ${assignment.numero}**`,
     `Mapa: ${assignment.mapa}`,
     `Killer: ${assignment.killer}`,
-    `Time Killer: ${assignment.killerTime === 'A' ? timeAName : timeBName}`,
+    `Quem começa de killer: ${assignment.killerTime === 'A' ? timeAName : timeBName}`,
     '',
   ]);
 
