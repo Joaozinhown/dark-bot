@@ -27,10 +27,11 @@ export async function startVeto(
     data: {
       confrontoId,
       tipo: 'killer',
-      set: 1,
+      set: 0,
       vezDe: primeiroKiller,
       mapasRestantes: JSON.stringify(poolConfig.mapas),
       killersRestantes: JSON.stringify(poolConfig.killers),
+      killerEscolhido: '[]',
     },
   });
 
@@ -52,11 +53,18 @@ async function sendVetoStep(
   });
   if (!confronto) return;
 
-  const mapas = JSON.parse(vetoState.mapasRestantes) as string[];
   const killers = JSON.parse(vetoState.killersRestantes) as string[];
-  if (killers.length <= mapas.length) {
+  if (killers.length <= 1) {
     await finalizeVeto(guild, confrontoId, canalTexto);
     return;
+  }
+
+  const stepIndex = vetoState.set;
+  let action = 'ban';
+  if (confronto.formato === 'MD3') {
+    if (stepIndex === 4 || stepIndex === 5) action = 'pick';
+  } else {
+    if (stepIndex === 2 || stepIndex === 3 || stepIndex === 6 || stepIndex === 7) action = 'pick';
   }
 
   const timeARole = await guild.roles.fetch(confronto.timeARoleId);
@@ -64,10 +72,10 @@ async function sendVetoStep(
   if (!timeARole || !timeBRole) return;
 
   const vezRole = vetoState.vezDe === 'A' ? timeARole : timeBRole;
-  const embed = createVetoEmbed(mapas.length, killers, vezRole.name);
+  const embed = createVetoEmbed(action, killers, vezRole.name);
   const banSelect = new StringSelectMenuBuilder()
     .setCustomId(`killer-ban:${confrontoId}`)
-    .setPlaceholder('Escolha um killer para banir')
+    .setPlaceholder(action === 'pick' ? 'Escolha um killer para jogar' : 'Escolha um killer para banir')
     .addOptions(
       killers.map((killer, index) => ({
         label: killer.slice(0, 100),
@@ -135,10 +143,9 @@ export async function handleBanSelection(
   }
 
   const killers = JSON.parse(vetoState.killersRestantes) as string[];
-  const mapas = JSON.parse(vetoState.mapasRestantes) as string[];
   const killerBanido = interaction.values[0];
   const killerIndex = killers.indexOf(killerBanido);
-  if (killerIndex < 0 || killers.length <= mapas.length) {
+  if (killerIndex < 0 || killers.length <= 1) {
     await interaction.reply({
       embeds: [createErrorEmbed('Killer indisponivel. Use a mensagem mais recente.')],
       flags: 64,
@@ -148,17 +155,30 @@ export async function handleBanSelection(
 
   await interaction.deferUpdate();
 
+  const stepIndex = vetoState.set;
+  let action = 'ban';
+  if (confronto.formato === 'MD3') {
+    if (stepIndex === 4 || stepIndex === 5) action = 'pick';
+  } else {
+    if (stepIndex === 2 || stepIndex === 3 || stepIndex === 6 || stepIndex === 7) action = 'pick';
+  }
+
   const killersRestantes = killers.filter((_, index) => index !== killerIndex);
+  const pickedKillers = vetoState.killerEscolhido ? JSON.parse(vetoState.killerEscolhido) : [];
+  if (action === 'pick') {
+    pickedKillers.push(killerBanido);
+  }
+
   const proximaVez: VetoVez = vetoState.vezDe === 'A' ? 'B' : 'A';
   const proximoTimeName = proximaVez === 'A' ? timeARole.name : timeBRole.name;
-  const bansRestantes = killersRestantes.length - mapas.length;
 
   await interaction.editReply({
     embeds: [createBanEmbed(
+      action,
       vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name,
       killerBanido,
       proximoTimeName,
-      bansRestantes,
+      killersRestantes.length > 1,
     )],
     components: [],
   });
@@ -167,7 +187,9 @@ export async function handleBanSelection(
     where: { confrontoId },
     data: {
       killersRestantes: JSON.stringify(killersRestantes),
+      killerEscolhido: JSON.stringify(pickedKillers),
       vezDe: proximaVez,
+      set: stepIndex + 1,
     },
   });
 
@@ -193,9 +215,12 @@ async function finalizeVeto(
 
   const mapas = JSON.parse(vetoState.mapasRestantes) as string[];
   const killers = JSON.parse(vetoState.killersRestantes) as string[];
+  const pickedKillers = vetoState.killerEscolhido ? JSON.parse(vetoState.killerEscolhido) : [];
+  const finalKillers = [...pickedKillers, killers[0]];
+
   const assignments = createSetAssignments(
     mapas,
-    killers,
+    finalKillers,
     confronto.primeiroKiller as VetoVez,
   );
 

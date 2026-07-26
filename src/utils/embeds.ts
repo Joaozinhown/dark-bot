@@ -23,10 +23,10 @@ export function createConfrontoEmbed(
         '',
         `**Pool:** Pool ${poolNum} — ${formato}`,
         `**Formato:** Melhor de ${formato === 'MD3' ? '3' : '5'}`,
-        `**Sorteio:** ${confronto.primeiroKiller === 'A' ? timeAName : timeBName} comeca o veto e joga de Killer no Set 1`,
+        `**Sorteio:** ${confronto.primeiroKiller === 'A' ? timeAName : timeBName} comeca o banimento e joga de Killer no Set 1`,
         '',
         '---',
-        '**INICIANDO VETO DE KILLERS**',
+        '**INICIANDO BANIMENTO DE KILLERS**',
       ].join('\n'),
     )
     .setThumbnail(DTA_LOGO)
@@ -35,7 +35,7 @@ export function createConfrontoEmbed(
 }
 
 export function createVetoEmbed(
-  sets: number,
+  action: string,
   itensRestantes: string[],
   timeName: string,
 ): EmbedBuilder {
@@ -44,20 +44,22 @@ export function createVetoEmbed(
     .map((item, index) => `**${index + 1}.** ${item}`)
     .join('\n');
 
+  const titleAction = action === 'pick' ? 'PICK DE KILLER' : 'BANIMENTO DE KILLER';
+  const actionText = action === 'pick' ? 'escolha' : 'banimento';
+
   return new EmbedBuilder()
-    .setTitle('VETO DE KILLERS')
+    .setTitle(titleAction)
     .setColor(COLORS.accent as any)
     .setDescription(
       [
         `**Vez de:** ${timeName}`,
-        `**Restantes:** ${itensRestantes.length}`,
-        `**Bans restantes:** ${itensRestantes.length - sets}`,
+        `**Killers Restantes:** ${itensRestantes.length}`,
         '',
         '**Killers disponiveis:**',
         preview,
         itensRestantes.length > 12 ? `\n...e mais ${itensRestantes.length - 12}` : '',
         '',
-        'Use o menu abaixo para escolher o banimento.',
+        `Use o menu abaixo para confirmar sua ${actionText}.`,
       ].join('\n'),
     )
     .setThumbnail(DTA_LOGO)
@@ -66,26 +68,29 @@ export function createVetoEmbed(
 }
 
 export function createBanEmbed(
+  action: string,
   timeName: string,
   itemBanido: string,
   proximoTimeName: string,
-  bansRestantes: number,
+  hasMore: boolean,
 ): EmbedBuilder {
-  const nextStep = bansRestantes > 0
+  const nextStep = hasMore
     ? [
       `**Vez de:** ${proximoTimeName}`,
-      `**Bans restantes:** ${bansRestantes}`,
       '',
       'Aguardando proxima escolha no menu.',
     ]
-    : ['Veto concluido. Preparando os sets...'];
+    : ['Banimento concluido. Preparando os sets...'];
+
+  const title = action === 'pick' ? 'KILLER ESCOLHIDO' : 'KILLER BANIDO';
+  const actVerb = action === 'pick' ? 'escolheu' : 'baniu';
 
   return new EmbedBuilder()
-    .setTitle('KILLER BANIDO')
+    .setTitle(title)
     .setColor(COLORS.gold as any)
     .setDescription(
       [
-        `**${timeName} baniu:** ${itemBanido}`,
+        `**${timeName} ${actVerb}:** ${itemBanido}`,
         '',
         ...nextStep,
       ].join('\n'),
