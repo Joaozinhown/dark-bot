@@ -118,7 +118,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const embed = createConfrontoEmbed(confrontoData, timeA.name, timeB.name);
 
-  await interaction.editReply({ embeds: [embed] });
+  // Coin toss animation
+  await interaction.editReply({ content: '🪙 **Lançando a moeda...**' });
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  await interaction.editReply({ content: '🪙 **A moeda está no ar...**' });
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  const winnerName = primeiroKiller === 'A' ? timeA.name : timeB.name;
+  await interaction.editReply({ 
+    content: `🪙 Cara ou Coroa finalizado! O time **${winnerName}** venceu e começará de Killer!`,
+    embeds: [embed] 
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
   await startVeto(interaction.guild!, confronto.id, poolConfig, primeiroKiller, textChannel);
 }

@@ -38,17 +38,18 @@ export function createVetoEmbed(
   action: string,
   itensRestantes: string[],
   timeName: string,
+  isTiebreak: boolean = false,
 ): EmbedBuilder {
   const preview = itensRestantes
     .slice(0, 12)
     .map((item, index) => `**${index + 1}.** ${item}`)
     .join('\n');
 
-  const titleAction = action === 'pick' ? 'PICK DE KILLER' : 'BANIMENTO DE KILLER';
-  const actionText = action === 'pick' ? 'escolha' : 'banimento';
-  const embedColor = action === 'pick' ? COLORS.success : COLORS.accent;
+  const isPick = action === 'pick';
+  const titleAction = isPick ? 'PICK DE KILLER' : (isTiebreak ? 'BANIMENTO PARA TIEBREAK' : 'BANIMENTO DE KILLER');
+  const embedColor = isPick ? COLORS.success : COLORS.accent;
 
-  const instructionText = action === 'pick'
+  const instructionText = isPick
     ? '**Instrução:** Selecione no menu abaixo o Killer que o seu time quer **JOGAR** no set.'
     : '**Instrução:** Selecione no menu abaixo o Killer que você deseja **BANIR** (ele ficará indisponível).';
 
@@ -78,6 +79,7 @@ export function createBanEmbed(
   itemBanido: string,
   proximoTimeName: string,
   hasMore: boolean,
+  isTiebreak: boolean = false,
 ): EmbedBuilder {
   const nextStep = hasMore
     ? [
@@ -87,7 +89,7 @@ export function createBanEmbed(
     ]
     : ['Banimento concluido. Preparando os sets...'];
 
-  const title = action === 'pick' ? 'KILLER ESCOLHIDO' : 'KILLER BANIDO';
+  const title = action === 'pick' ? 'KILLER ESCOLHIDO' : (isTiebreak ? 'KILLER BANIDO (TIEBREAK)' : 'KILLER BANIDO');
   const actVerb = action === 'pick' ? 'escolheu' : 'baniu';
   const embedColor = action === 'pick' ? COLORS.success : COLORS.accent;
 
@@ -110,12 +112,14 @@ export function createSetsReadyEmbed(
   assignments: SetAssignment[],
   timeAName: string,
   timeBName: string,
+  timeAPing: string,
+  timeBPing: string,
 ): EmbedBuilder {
   const sets = assignments.flatMap(assignment => [
     `**SET ${assignment.numero}**`,
     `Mapa: ${assignment.mapa}`,
     `Killer: ${assignment.killer}`,
-    `Quem começa de killer: ${assignment.killerTime === 'A' ? timeAName : timeBName}`,
+    `Quem começa de killer: ${assignment.killerTime === 'A' ? timeAPing : timeBPing}`,
     '',
   ]);
 

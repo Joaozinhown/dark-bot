@@ -61,10 +61,13 @@ async function sendVetoStep(
 
   const stepIndex = vetoState.set;
   let action = 'ban';
+  let isTiebreak = false;
   if (confronto.formato === 'MD3') {
     if (stepIndex === 4 || stepIndex === 5) action = 'pick';
+    if (stepIndex > 5) isTiebreak = true;
   } else {
     if (stepIndex === 2 || stepIndex === 3 || stepIndex === 6 || stepIndex === 7) action = 'pick';
+    if (stepIndex > 7) isTiebreak = true;
   }
 
   const timeARole = await guild.roles.fetch(confronto.timeARoleId);
@@ -72,7 +75,7 @@ async function sendVetoStep(
   if (!timeARole || !timeBRole) return;
 
   const vezRole = vetoState.vezDe === 'A' ? timeARole : timeBRole;
-  const embed = createVetoEmbed(action, killers, vezRole.name);
+  const embed = createVetoEmbed(action, killers, vezRole.name, isTiebreak);
   const banSelect = new StringSelectMenuBuilder()
     .setCustomId(`killer-ban:${confrontoId}`)
     .setPlaceholder(action === 'pick' ? 'Escolha um killer para jogar' : 'Escolha um killer para banir')
@@ -84,8 +87,9 @@ async function sendVetoStep(
       })),
     );
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(banSelect);
+  const actionTextContent = action === 'pick' ? 'escolher o Killer' : 'banir um Killer';
   const message = await canalTexto.send({
-    content: `<@&${vezRole.id}>`,
+    content: `<@&${vezRole.id}>, chegou a vez do seu time **${actionTextContent}**!`,
     embeds: [embed],
     components: [row],
   });
@@ -157,10 +161,13 @@ export async function handleBanSelection(
 
   const stepIndex = vetoState.set;
   let action = 'ban';
+  let isTiebreak = false;
   if (confronto.formato === 'MD3') {
     if (stepIndex === 4 || stepIndex === 5) action = 'pick';
+    if (stepIndex > 5) isTiebreak = true;
   } else {
     if (stepIndex === 2 || stepIndex === 3 || stepIndex === 6 || stepIndex === 7) action = 'pick';
+    if (stepIndex > 7) isTiebreak = true;
   }
 
   const killersRestantes = killers.filter((_, index) => index !== killerIndex);
@@ -171,14 +178,18 @@ export async function handleBanSelection(
 
   const proximaVez: VetoVez = vetoState.vezDe === 'A' ? 'B' : 'A';
   const proximoTimeName = proximaVez === 'A' ? timeARole.name : timeBRole.name;
+  const currentTeamName = vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name;
+  const verbText = action === 'pick' ? 'escolheu' : 'baniu';
 
   await interaction.editReply({
+    content: `O time **${currentTeamName}** ${verbText} o Killer **${killerBanido}**!`,
     embeds: [createBanEmbed(
       action,
-      vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name,
+      currentTeamName,
       killerBanido,
       proximoTimeName,
       killersRestantes.length > 1,
+      isTiebreak,
     )],
     components: [],
   });
@@ -243,7 +254,14 @@ async function finalizeVeto(
   ]);
 
   await canalTexto.send({
-    content: `${timeARole} e ${timeBRole}, os sets foram definidos! Confiram a tabela abaixo:`,
-    embeds: [createSetsReadyEmbed(assignments, timeARole.name, timeBRole.name)],
+    content: `Os times <@&${timeARole.id}> e <@&${timeBRole.id}> definiram todos os Killers para o confronto!
+Por favor, confiram na tabela abaixo qual time começará de Killer em cada SET.`,
+    embeds: [createSetsReadyEmbed(
+      assignments, 
+      timeARole.name, 
+      timeBRole.name, 
+      `<@&${timeARole.id}>`, 
+      `<@&${timeBRole.id}>`
+    )],
   });
 }
