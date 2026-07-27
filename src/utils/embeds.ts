@@ -48,6 +48,10 @@ export function createVetoEmbed(
   const actionText = action === 'pick' ? 'escolha' : 'banimento';
   const embedColor = action === 'pick' ? COLORS.success : COLORS.accent;
 
+  const instructionText = action === 'pick'
+    ? '**Instrução:** Selecione no menu abaixo o Killer que o seu time quer **JOGAR** no set.'
+    : '**Instrução:** Selecione no menu abaixo o Killer que você deseja **BANIR** (ele ficará indisponível).';
+
   return new EmbedBuilder()
     .setTitle(titleAction)
     .setColor(embedColor as any)
@@ -60,7 +64,7 @@ export function createVetoEmbed(
         preview,
         itensRestantes.length > 12 ? `\n...e mais ${itensRestantes.length - 12}` : '',
         '',
-        `Use o menu abaixo para confirmar sua ${actionText}.`,
+        instructionText,
       ].join('\n'),
     )
     .setThumbnail(DTA_LOGO)
