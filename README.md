@@ -1,4 +1,6 @@
 
+<p align="center">
+ <img src="https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp" alt="DTA Logo" width="200"/>
 <h1 align="center">Dark Bot</h1>
 
 <p align="center">
