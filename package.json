@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && npm run build:ts",
     "build:ts": "tsc",
-    "test": "npm run build:ts && node --test build/systems/veto-rules.test.js",
+    "test": "npm run build:ts && node --test build/systems/veto-rules.test.js build/tests/commands-contract.test.js",
     "start": "node scripts/start.js",
     "start:bot-hosting": "npm start",
     "deploy:discloud": "discloud app up",
