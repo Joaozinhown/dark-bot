@@ -5,6 +5,12 @@ import {
   Role,
 } from 'discord.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
+import {
+  addMemberToTeamRole,
+  deleteTeamRole,
+  removeMemberFromTeamRole,
+  renameTeamRole,
+} from '../services/role-service';
 
 export const data = new SlashCommandBuilder()
   .setName('gerenciar-cargo')
@@ -96,7 +102,7 @@ async function handleRenomear(interaction: ChatInputCommandInteraction) {
   const cargo = interaction.options.getRole('cargo', true) as Role;
   const novoNome = interaction.options.getString('novo-nome', true);
 
-  await cargo.setName(novoNome);
+  await renameTeamRole(cargo, novoNome);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo renomeado para **${novoNome}**.`)],
@@ -107,7 +113,7 @@ async function handleRenomear(interaction: ChatInputCommandInteraction) {
 async function handleDeletar(interaction: ChatInputCommandInteraction) {
   const cargo = interaction.options.getRole('cargo', true) as Role;
 
-  await cargo.delete('Deletado por organizador');
+  await deleteTeamRole(cargo);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo **${cargo.name}** deletado.`)],
@@ -127,7 +133,7 @@ async function handleMembroAdicionar(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  await membro.roles.add(cargo.id);
+  await addMemberToTeamRole(membro.roles, cargo.id);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Membro adicionado ao cargo **${cargo.name}**.`)],
@@ -147,7 +153,7 @@ async function handleMembroRemover(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  await membro.roles.remove(cargo.id);
+  await removeMemberFromTeamRole(membro.roles, cargo.id);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Membro removido do cargo **${cargo.name}**.`)],

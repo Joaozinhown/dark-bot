@@ -2,9 +2,12 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
 } from 'discord.js';
-import prisma from '../database/client';
 import { deleteConfrontoVoiceChannels } from '../utils/channels';
 import { createEncerramentoEmbed, createErrorEmbed, createSuccessEmbed } from '../utils/embeds';
+import {
+  confrontationService,
+  ConfrontationServiceError,
+} from '../services/confrontation-service';
 
 export const data = new SlashCommandBuilder()
   .setName('encerrar')
@@ -26,37 +29,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const confrontoId = interaction.options.getInteger('confronto-id', true);
   const motivo = interaction.options.getString('motivo');
 
-  const confronto = await prisma.confronto.findUnique({
-    where: { id: confrontoId },
-  });
-
-  if (!confronto) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Confronto nao encontrado.')],
-      flags: 64,
-    });
+  let confronto;
+  try {
+    confronto = await confrontationService.close(
+      confrontoId,
+      motivo,
+      interaction.guildId!,
+      () => interaction.deferReply(),
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof ConfrontationServiceError)) throw error;
+    await interaction.reply({ embeds: [createErrorEmbed(error.message)], flags: 64 });
     return;
   }
-
-  if (confronto.status === 'encerrado') {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Este confronto ja foi encerrado.')],
-      flags: 64,
-    });
-    return;
-  }
-
-  await interaction.deferReply();
-
-  await prisma.confronto.update({
-    where: { id: confrontoId },
-    data: {
-      status: 'encerrado',
-      encerradoEm: new Date(),
-      motivoEncerramento: motivo,
-    },
-  });
-
   await deleteConfrontoVoiceChannels(
     interaction.guild!,
     confronto.vozTimeAId,
