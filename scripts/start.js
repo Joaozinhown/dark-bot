@@ -1,7 +1,5 @@
 const { spawnSync } = require("child_process");
-
-process.env.DATABASE_URL ||= "file:./prisma/darkbot.db";
-process.env.PRISMA_HIDE_UPDATE_MESSAGE ||= "1";
+const { join } = require("path");
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -19,7 +17,5 @@ function run(command, args) {
   }
 }
 
-const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-
-run(npx, ["prisma", "db", "push", "--skip-generate", "--accept-data-loss"]);
+run(process.execPath, [join(__dirname, "migrate.js")]);
 run(process.execPath, ["build/index.js"]);

@@ -4,10 +4,10 @@
   "description": "Bot competitivo DBD — Queens Trials",
   "main": "build/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node scripts/migrate.js && tsx watch src/index.ts",
     "build": "prisma generate && npm run build:ts",
     "build:ts": "tsc",
-    "test": "npm run build:ts && node --test build/systems/veto-rules.test.js build/tests/commands-contract.test.js build/services/role-service.test.js build/services/pool-service.test.js build/services/confrontation-service.test.js build/services/player-service.test.js build/services/report-service.test.js build/services/guild-permission-service.test.js",
+    "test": "npm run build:ts && node --test build/systems/veto-rules.test.js build/tests/commands-contract.test.js build/tests/migration-integration.test.js build/services/audit-service.test.js build/services/role-service.test.js build/services/pool-service.test.js build/services/preset-service.test.js build/services/confrontation-service.test.js build/services/player-service.test.js build/services/report-service.test.js build/services/guild-permission-service.test.js",
     "start": "node scripts/start.js",
     "start:bot-hosting": "npm start",
     "deploy:discloud": "discloud app up",
@@ -15,7 +15,7 @@
     "deploy": "tsx src/deploy-commands.ts",
     "postinstall": "node -e \"const fs=require('fs'); if (fs.existsSync('prisma/schema.prisma')) require('child_process').execSync('npm run build',{stdio:'inherit'});\"",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push --skip-generate",
+    "db:deploy": "node scripts/migrate.js",
     "db:migrate": "prisma migrate dev"
   },
   "dependencies": {

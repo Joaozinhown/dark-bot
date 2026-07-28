@@ -1,9 +1,9 @@
 import { REST, Routes, Collection, Client, Guild } from 'discord.js';
 import { readdirSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
 import prisma from './database/client';
 import { POOL_PRESETS } from './data/pool-presets';
+import { createPresetService, PresetStore } from './services/preset-service';
 
 const GUILD_ID = process.env.GUILD_ID!;
 const CLIENT_ID = process.env.CLIENT_ID!;
@@ -16,23 +16,15 @@ interface LoadedCommands {
   collection: Collection<string, any>;
 }
 
-export function ensureDatabase(): void {
-  console.log(`[Startup] DATABASE_URL: ${process.env.DATABASE_URL}`);
-  console.log('[Startup] Sincronizando schema do banco de dados...');
+export async function ensureDatabase(): Promise<void> {
+  console.log('[Startup] Verificando conexao com o banco de dados...');
 
   try {
-    execSync('npx prisma db push --skip-generate --accept-data-loss', {
-      env: {
-        ...process.env,
-        PRISMA_HIDE_UPDATE_MESSAGE: process.env.PRISMA_HIDE_UPDATE_MESSAGE ?? '1',
-      },
-      stdio: 'pipe',
-      timeout: 30000,
-    });
-    console.log('[Startup] Schema do banco sincronizado com sucesso!');
-  } catch (error: any) {
-    console.error('[Startup] Erro ao sincronizar schema:', error.stderr?.toString() || error.message);
-    process.exit(1);
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('[Startup] Conexao com o banco verificada com sucesso!');
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Erro ao verificar conexao com o banco: ${message}`);
   }
 }
 
@@ -110,52 +102,40 @@ export async function deployCommandsAuto(token: string, client?: Client): Promis
   return loadedCommands.collection;
 }
 
+const presetStore: PresetStore = {
+  async listPools(guildId) {
+    return prisma.pool.findMany({
+      where: { guildId },
+      select: { nome: true },
+    });
+  },
+  async createPresetPool(guildId, preset) {
+    await prisma.pool.create({
+      data: {
+        guildId,
+        nome: preset.nome,
+        formato: preset.formato,
+        mapas: {
+          create: preset.mapas.map((nome, index) => ({
+            nome,
+            ordem: index + 1,
+          })),
+        },
+        killers: {
+          create: preset.killers.map((nome, index) => ({
+            nome,
+            ordem: index + 1,
+          })),
+        },
+      },
+    });
+  },
+};
+
+const presetService = createPresetService(presetStore);
+
 export async function syncPresetPoolsForGuild(guildId: string): Promise<void> {
-  await prisma.$transaction(async transaction => {
-    const existingPools = await transaction.pool.findMany({
-      where: { guildId },
-      orderBy: { id: 'asc' },
-    });
-
-    await transaction.pool.updateMany({
-      where: { guildId },
-      data: { ativa: false },
-    });
-
-    for (const preset of POOL_PRESETS) {
-      const existingPool = existingPools.find(pool => pool.nome === preset.nome);
-      const pool = existingPool
-        ? await transaction.pool.update({
-          where: { id: existingPool.id },
-          data: { formato: preset.formato, ativa: true },
-        })
-        : await transaction.pool.create({
-          data: {
-            guildId,
-            nome: preset.nome,
-            formato: preset.formato,
-          },
-        });
-
-      await transaction.poolMapa.deleteMany({ where: { poolId: pool.id } });
-      await transaction.poolKiller.deleteMany({ where: { poolId: pool.id } });
-
-      await transaction.poolMapa.createMany({
-        data: preset.mapas.map((nome, index) => ({
-          poolId: pool.id,
-          nome,
-          ordem: index + 1,
-        })),
-      });
-      await transaction.poolKiller.createMany({
-        data: preset.killers.map((nome, index) => ({
-          poolId: pool.id,
-          nome,
-          ordem: index + 1,
-        })),
-      });
-    }
-  });
+  await presetService.syncGuild(guildId);
 
   console.log(`[Startup] ${POOL_PRESETS.length} pools presetadas sincronizadas no servidor ${guildId}.`);
 }
