@@ -11,7 +11,7 @@
 
 ## Target architecture
 
-One Node.js process will host Discord client, API and built frontend when Platinum cutover is approved.
+One Node.js process hosts the Discord client, API and built frontend on the Diamond plan.
 
 ```text
 Browser
@@ -24,7 +24,7 @@ Browser
 
 Slash command handlers and API controllers must call the same application services. The panel cannot duplicate tournament rules.
 
-Feature development keeps `TYPE=bot` and `ADMIN_PANEL_ENABLED=false`. The Discloud Platinum cutover must use `TYPE=site`, port `8080`, `0.0.0.0` and a reserved subdomain because the same process exposes a web interface. Backup and rollback remain mandatory.
+The Discloud Diamond deployment uses `TYPE=site`, port `8080`, `0.0.0.0` and a reserved subdomain because the same process exposes a web interface. Backup and rollback remain mandatory.
 
 ## Implementation status
 
@@ -38,7 +38,7 @@ Feature development keeps `TYPE=bot` and `ADMIN_PANEL_ENABLED=false`. The Disclo
 | Administration P0 | Complete | Pools, teams, members, permissions, command toggles and confrontations. |
 | Live operations | Complete for current scope | SSE, reconnect, heartbeat, stream limits and health. |
 | Custom command templates | Deferred | Would require a new interaction contract or Message Content intent. |
-| Platinum cutover | Pending Discord OAuth secret | `dta-admin` is reserved; client secret and callback remain. |
+| Diamond deployment | Deployed | `dta-admin` is online; `admin-dta-bot` is reserved for a controlled URL migration. |
 
 ## Authorization model
 
@@ -128,9 +128,9 @@ Safe response templates remain outside the current release. They cannot become s
 
 Exit: no duplicate commands, cross-guild events or stale orphan registrations.
 
-### Phase 7: Platinum cutover
+### Phase 7: Diamond deployment
 
-- Confirm Platinum subscription and production app ID.
+- Confirm Diamond subscription and production app ID.
 - Create backup and version tag.
 - Change hosting mode only in cutover PR after approval.
 - Bind port 8080 on `0.0.0.0`, configure subdomain and OAuth callback.

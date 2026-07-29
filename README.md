@@ -99,7 +99,7 @@ Responsabilidades principais:
 - Node.js 22 ou superior.
 - Aplicacao Discord com bot configurado.
 - SQLite local ou volume persistente na hospedagem.
-- Discloud Platinum para publicar o painel.
+- Discloud Diamond para publicar o painel e usar dominio personalizado.
 
 ## Instalacao local
 
@@ -187,7 +187,7 @@ npm audit --omit=dev
 
 O teste `src/tests/commands-contract.test.ts` deve continuar aprovando os 11 payloads. Qualquer mudanca nesse contrato exige uma decisao separada.
 
-## Deploy na Discloud Platinum
+## Deploy na Discloud Diamond
 
 Bot com interface web e classificado pela Discloud como site. O corte de producao requer:
 
@@ -197,7 +197,7 @@ Bot com interface web e classificado pela Discloud como site. O corte de produca
 - bind em `0.0.0.0`, ja implementado.
 - callback `https://<subdominio>.discloud.app/api/auth/callback` no Discord.
 
-O procedimento completo, validacao e rollback estao em [docs/operations/admin-panel-platinum-runbook.md](docs/operations/admin-panel-platinum-runbook.md).
+O procedimento completo, validacao e rollback estao em [docs/operations/admin-panel-discloud-runbook.md](docs/operations/admin-panel-discloud-runbook.md).
 
 ## Seguranca
 
@@ -214,7 +214,7 @@ O modelo de ameacas e os controles estao em [docs/security/admin-panel-threat-mo
 ## Documentacao
 
 - [Plano de implementacao](docs/architecture/admin-panel-implementation.md)
-- [Runbook Platinum](docs/operations/admin-panel-platinum-runbook.md)
+- [Runbook Discloud](docs/operations/admin-panel-discloud-runbook.md)
 - [Modelo de ameacas](docs/security/admin-panel-threat-model.md)
 - [Produto](PRODUCT.md)
 - [Design](DESIGN.md)

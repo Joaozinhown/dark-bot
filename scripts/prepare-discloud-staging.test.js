@@ -253,3 +253,60 @@ test('rejects placeholder Discord credentials', () => {
     rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test('accepts an HTTPS OAuth callback on a verified custom domain', () => {
+  const fixture = createFixture();
+  try {
+    const envPath = path.join(fixture.project, '.env');
+    const environment = readFileSync(envPath, 'utf8').replace(
+      'https://dta-admin.discloud.app/api/auth/callback',
+      'https://admin-dta-bot.com/api/auth/callback',
+    );
+    writeFileSync(envPath, environment);
+
+    prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath,
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    });
+    cleanupStaging({ projectRoot: fixture.project, outputDirectory: fixture.output });
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('rejects unsafe OAuth callback URL variants', () => {
+  const unsafeCallbacks = [
+    'http://admin-dta-bot.com/api/auth/callback',
+    'https://admin-dta-bot.com:8443/api/auth/callback',
+    'https://user:pass@admin-dta-bot.com/api/auth/callback',
+    'https://admin-dta-bot.com/api/auth/callback?next=evil',
+    'https://admin-dta-bot.com/api/auth/callback#fragment',
+    'https://admin-dta-bot.com/api/auth/other',
+    'https://unapproved.example/api/auth/callback',
+  ];
+
+  for (const callback of unsafeCallbacks) {
+    const fixture = createFixture();
+    try {
+      const envPath = path.join(fixture.project, '.env');
+      const environment = readFileSync(envPath, 'utf8').replace(
+        'https://dta-admin.discloud.app/api/auth/callback',
+        callback,
+      );
+      writeFileSync(envPath, environment);
+
+      assert.throws(() => prepareStaging({
+        projectRoot: fixture.project,
+        outputDirectory: fixture.output,
+        envPath,
+        databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+        trackedFiles: ['src/index.ts', 'discloud.config'],
+      }), /DISCORD_REDIRECT_URI/i, callback);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  }
+});

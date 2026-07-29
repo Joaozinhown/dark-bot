@@ -16,6 +16,7 @@ const { execFileSync } = require('node:child_process');
 
 const STAGING_MARKER = '.dta-discloud-staging';
 const STAGING_MARKER_CONTENT = 'DTA Discloud staging directory\n';
+const APPROVED_CUSTOM_DOMAINS = new Set(['admin-dta-bot.com']);
 
 const REQUIRED_ENVIRONMENT_VARIABLES = [
   'DISCORD_TOKEN',
@@ -109,12 +110,24 @@ function readDeploymentEnvironment(envPath, subdomain) {
   if (decodedKey.length !== 32 || decodedKey.toString('base64') !== encryptionKey) {
     throw new Error('PANEL_ENCRYPTION_KEY must be canonical base64 for exactly 32 bytes.');
   }
-  const redirect = new URL(environment.get('DISCORD_REDIRECT_URI'));
+  let redirect;
+  try {
+    redirect = new URL(environment.get('DISCORD_REDIRECT_URI'));
+  } catch {
+    throw new Error('DISCORD_REDIRECT_URI must be a valid HTTPS callback URL.');
+  }
   const expectedHost = `${subdomain}.discloud.app`;
+  const isApprovedHost = redirect.hostname === expectedHost
+    || APPROVED_CUSTOM_DOMAINS.has(redirect.hostname);
   if (redirect.protocol !== 'https:'
-    || redirect.hostname !== expectedHost
-    || redirect.pathname !== '/api/auth/callback') {
-    throw new Error(`DISCORD_REDIRECT_URI must be https://${expectedHost}/api/auth/callback.`);
+    || !isApprovedHost
+    || redirect.port
+    || redirect.username
+    || redirect.password
+    || redirect.pathname !== '/api/auth/callback'
+    || redirect.search
+    || redirect.hash) {
+    throw new Error(`DISCORD_REDIRECT_URI must be https://${expectedHost}/api/auth/callback or the same path on a verified custom domain.`);
   }
 }
 

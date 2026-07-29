@@ -1,16 +1,18 @@
-# Runbook do painel na Discloud Platinum
+# Runbook do painel na Discloud Diamond
 
 ## Objetivo
 
-Publicar bot, API e painel no mesmo processo Node.js, sem alterar os 11 payloads slash e sem criar uma segunda instancia do bot.
+Publicar bot, API e painel no mesmo processo Node.js, sem alterar os 11 payloads slash e sem executar uma segunda instancia concorrente do bot.
 
-Estado verificado em 28 de julho de 2026:
+Estado verificado em 29 de julho de 2026:
 
-- conta Discloud no plano Platinum;
-- 2048 MB disponiveis;
-- app atual `1785101572014` com 512 MB;
-- app atual offline;
-- subdominio `dta-admin` reservado e disponivel para o corte;
+- conta Discloud no plano Diamond;
+- 4096 MB totais e 1024 MB alocados;
+- site `dta-admin` online com 512 MB e `AUTORESTART=true`;
+- app anterior `1785101572014` offline, mantido somente para rollback imediato;
+- subdominio `dta-admin` associado ao site;
+- subdominio `admin-dta-bot` reservado e disponivel, sem alterar a producao;
+- bot e painel executados pelo mesmo processo no site `dta-admin`;
 - Discloud CLI `2.11.1` instalada.
 
 ## Condicoes para o corte
@@ -23,14 +25,15 @@ Estado verificado em 28 de julho de 2026:
 - Chaves novas de cookie e criptografia geradas localmente.
 - Somente uma instancia usando `DISCORD_TOKEN` e o arquivo SQLite.
 
-## 1. Confirmar o subdominio
+## 1. Confirmar os subdominios
 
 O nome deve ter ate 20 caracteres e aceitar apenas letras, numeros e hifen.
 
-O subdominio `dta-admin` ja foi reservado. Confirme antes do deploy:
+O site continua em `dta-admin`. `admin-dta-bot` fica reservado para uma migracao posterior, depois que o callback OAuth correspondente estiver cadastrado. Confirme ambos:
 
 ```powershell
 discloud subdomain info --id dta-admin
+discloud subdomain info --id admin-dta-bot
 ```
 
 URL esperada:
@@ -39,7 +42,33 @@ URL esperada:
 https://dta-admin.discloud.app
 ```
 
-Se `dta-admin` nao estiver disponivel, escolha outro nome e use o mesmo valor em todos os passos seguintes.
+Nao altere `ID=dta-admin` enquanto a producao estiver ativa nesse endereco. Trocar o ID exige um corte controlado e cadastro previo do novo callback no Discord.
+
+### Dominio personalizado
+
+O dominio desejado e `admin-dta-bot.com`. Ele precisa estar registrado em um provedor externo e sob controle do proprietario antes de ser vinculado. Depois da compra:
+
+1. Cadastre `https://admin-dta-bot.com/api/auth/callback` no Discord Developer Portal.
+2. Registre o dominio personalizado na Discloud e vincule-o ao app `dta-admin`:
+
+   ```powershell
+   discloud domain create --id admin-dta-bot.com --app dta-admin
+   discloud domain info --id admin-dta-bot.com
+   ```
+
+3. Configure os registros A e TXT exibidos pela Discloud no provedor DNS.
+4. Mantenha o proxy Cloudflare desativado, caso use Cloudflare.
+5. Verifique o dominio:
+
+   ```powershell
+   discloud domain verify --id admin-dta-bot.com
+   discloud domain info --id admin-dta-bot.com
+   ```
+
+6. Atualize `DISCORD_REDIRECT_URI` e faca novo deploy. O `app commit` executado na secao 7 faz a reconstrucao da aplicacao e ativa o vinculo.
+7. Execute o smoke test completo antes de retirar o callback anterior.
+
+Nao altere a URL OAuth antes da verificacao DNS e do cadastro do callback. A reserva do subdominio Discloud nao registra nem compra o dominio `.com`.
 
 ## 2. Configurar OAuth2 no Discord
 
@@ -57,11 +86,7 @@ Copie o client secret por um canal seguro diretamente para o `.env` local. Nao c
 
 ## 3. Preparar os segredos
 
-Gere chaves novas:
-
-```powershell
-node -e "const c=require('node:crypto'); console.log('PANEL_COOKIE_SECRET='+c.randomBytes(48).toString('base64url')); console.log('PANEL_ENCRYPTION_KEY='+c.randomBytes(32).toString('base64'))"
-```
+Gere `PANEL_COOKIE_SECRET` com 48 bytes aleatorios e `PANEL_ENCRYPTION_KEY` com 32 bytes aleatorios em Base64 canonico usando um gerenciador de segredos. Grave os valores diretamente no `.env`; nao os imprima em terminal, log ou historico de comandos.
 
 Atualize somente o `.env` ignorado pelo Git:
 
@@ -80,7 +105,7 @@ Mantenha sem alteracao os valores atuais de `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD
 ## 4. Fazer backup
 
 ```powershell
-discloud app backup 1785101572014 discloud\backups --save
+discloud app backup dta-admin discloud\backups --save
 Get-ChildItem discloud\backups -Recurse -File
 git rev-parse HEAD
 ```
@@ -158,29 +183,34 @@ Get-ChildItem $stage -Force | Select-Object Name,Length
 Get-Item (Join-Path $stage '.env'),(Join-Path $stage 'prisma\prisma\darkbot.db') | Select-Object FullName,Length
 ```
 
-Atualize o app existente por ID a partir do staging:
+Mantenha o app antigo offline e envie o staging somente ao site existente:
 
 ```powershell
 Push-Location $stage
 try {
-  discloud app commit 1785101572014
+  discloud app commit dta-admin
+  if ($LASTEXITCODE -ne 0) { throw 'Falha no commit do site dta-admin.' }
 } finally {
   Pop-Location
   npm run deploy:stage -- --cleanup $stage
 }
+
+$health = Invoke-RestMethod https://dta-admin.discloud.app/health
+if (-not $health.data.botReady) { throw 'Site respondeu, mas o bot nao esta pronto.' }
 ```
 
-O `finally` remove o `.env` e o banco temporarios mesmo quando o upload falha. A limpeza recusa diretorios sem o marcador privado criado pelo script.
-
-Se a plataforma recusar a conversao de `bot` para `site`, nao apague o app atual. Pare o procedimento e use o fluxo de upload de site somente depois de confirmar que o backup pode ser restaurado no novo app.
+O `finally` remove o `.env` e o banco temporarios mesmo quando o commit falha. A limpeza recusa diretorios sem o marcador privado criado pelo script. Nao inicie o app antigo como resposta automatica a uma falha de deploy.
 
 ## 8. Smoke test
 
 ```powershell
+discloud app status dta-admin
+discloud app logs dta-admin
 discloud app status 1785101572014
-discloud app logs 1785101572014
 Invoke-RestMethod https://dta-admin.discloud.app/health
 ```
+
+O site deve ficar online e o app `1785101572014` deve permanecer offline.
 
 Validar nos logs:
 
@@ -220,46 +250,29 @@ Observe por pelo menos 15 minutos:
 Se a memoria ficar proxima do limite, aumente a RAM pelo painel ou CLI sem alterar codigo:
 
 ```powershell
-discloud app ram 1785101572014 768
+discloud app ram dta-admin 768
 ```
 
 ## 10. Rollback
 
 Rollback imediato se o bot nao ficar online, o banco nao abrir, os comandos mudarem ou o painel expuser acesso indevido.
 
-1. Pare o app defeituoso.
-2. Extraia o backup em um diretorio temporario fora do repositorio.
-3. Mova o `.discloudignore` extraido para fora do staging para nao filtrar `.env` e SQLite.
-4. Confirme no staging `TYPE=bot`, `ID=1785101572014` e `ADMIN_PANEL_ENABLED=false`.
-5. Faca o commit do staging completo.
-6. Inicie o bot e confirme pools e os 11 comandos.
+1. Pare o site `dta-admin`.
+2. Confirme que ele ficou offline.
+3. Inicie o app anterior `1785101572014`.
+4. Confirme bot, pools e os 11 comandos antes de liberar uso.
 
 ```powershell
-discloud app stop 1785101572014
-$restore = '<caminho-absoluto-do-backup-extraido>'
-Add-Type -AssemblyName System.Security
-$encryptedEnv = Resolve-Path 'discloud\backups\env-pre-panel.dpapi'
-$protected = [IO.File]::ReadAllBytes($encryptedEnv)
-$plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
-  $protected,
-  $null,
-  [System.Security.Cryptography.DataProtectionScope]::CurrentUser
-)
-[IO.File]::WriteAllBytes((Join-Path $restore '.env'), $plain)
-$restoreIgnore = Join-Path $restore '.discloudignore'
-if (Test-Path $restoreIgnore) {
-  Move-Item -LiteralPath $restoreIgnore -Destination "$restore.discloudignore.reference"
-}
-Get-Item (Join-Path $restore '.env'),(Join-Path $restore 'prisma\prisma\darkbot.db') | Select-Object FullName,Length
-Push-Location $restore
-try {
-  discloud app commit 1785101572014
-} finally {
-  Pop-Location
-}
+discloud app stop dta-admin
+discloud app status dta-admin
+```
+
+Prossiga somente quando a tabela mostrar `Offline`. Se a parada falhar ou continuar pendente, nao inicie o app antigo.
+
+```powershell
 discloud app start 1785101572014
 discloud app status 1785101572014
 discloud app logs 1785101572014
 ```
 
-Nao execute dois processos com o mesmo token durante o rollback. Nao rode `git add` dentro de staging ou backup.
+Esse rollback imediato retorna ao banco congelado no momento do corte. Se o site ja recebeu novos confrontos ou configuracoes, baixe primeiro um backup de `dta-admin` e planeje a reconciliacao do SQLite antes de iniciar o app antigo. Nao execute dois processos com o mesmo token e nao rode `git add` dentro de staging ou backup.
