@@ -1,315 +1,223 @@
-<p align="center">
-  <img src="https://pxdrop.online/raw/d9fv0fmhv1ts73baugmg?file=queens-trials-logo.png" alt="DTA Logo" width="200"/>
-</p>
+# Dark Bot
 
-<h1 align="center">Dark Bot</h1>
+Bot competitivo da Dark Trials Arena para administrar confrontos 5v5 de Dead by Daylight. O mesmo processo Node.js executa o bot, a API privada e o painel administrativo.
 
-<p align="center">
-  <strong>Bot Discord competitivo para partidas 5v5 de Dead by Daylight</strong>
-</p>
+O painel complementa os comandos slash existentes. Ele nao registra, remove nem altera o payload desses comandos.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Discord.js-v14-5865F2?logo=discord&logoColor=white" alt="Discord.js"/>
-  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/Prisma-6.x-2D3748?logo=prisma&logoColor=white" alt="Prisma"/>
-  <img src="https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white" alt="Node.js"/>
-  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"/>
-</p>
+## Estado atual
 
-<p align="center">
-  Bot para gerenciamento de confrontos competitivos 5v5 com sistema de veto de mapas e killers,
-  canais automáticos por time e tracking de estatísticas.
-</p>
+- 11 comandos slash protegidos por teste de contrato.
+- Operacao multi-servidor com dados isolados por `guildId`.
+- Confrontos iniciados no canal onde o comando foi usado ou em um canal de texto existente selecionado no painel.
+- Nenhuma criacao automatica de canal de texto ou voz.
+- Mapas presetados por set; pick/ban apenas de killers.
+- Sorteio de quem inicia e alternancia entre os sets.
+- Painel React responsivo com atualizacao em tempo real por SSE.
+- Login Discord OAuth2 e autorizacao por servidor.
+- Auditoria das acoes administrativas feitas no painel.
 
----
+## Acesso administrativo
 
-## Funcionalidades
+Uma conta entra no painel apenas quando todas as condicoes abaixo sao verdadeiras:
 
-### Gerenciamento de Confrontos
-- Criar confrontos entre dois times com pool de mapas e killers específicos
-- Canais de voz automáticos por time (permissão restrita)
-- Canal de texto compartilhado entre os times
-- Encerramento manual com opção de apagar chat
+1. O bot esta conectado ao servidor.
+2. A conta Discord autenticada pertence ao servidor.
+3. A conta e dona do servidor, possui `Manage Guild` ou possui um cargo administrativo configurado no bot.
 
-### Sistema de Veto
-- Veto de mapas e killers por set (embed + botões)
-- Time A começa o veto, alternado até restar 1 mapa e 1 killer
-- Veto acontece para cada set individualmente
-- Validação de vez e turnos
+A API repete essa validacao em cada leitura, escrita e conexao SSE. Ocultar um botao no frontend nao concede nem substitui permissao.
 
-### Pools Editáveis
-- CRUD completo de pools via comando slash
-- Adicionar/remover mapas e killers
-- Ativar/desativar pools
-- Pools armazenadas no banco de dados
+## Comandos slash
 
-### Rankings e Estatísticas
-- Ranking dos times com vitórias/derrotas
-- Perfil do jogador com win rate
-- Histórico de confrontos
+| Comando | Uso |
+| --- | --- |
+| `/configurar-bot` | Configura os cargos com acesso administrativo. |
+| `/criar-confronto` | Cria o confronto no canal de texto atual. |
+| `/encerrar` | Encerra um confronto. |
+| `/gerenciar-cargo` | Renomeia, remove e gerencia membros dos cargos de time. |
+| `/gerenciar-pool` | Cria, lista, edita, ativa e remove pools. |
+| `/listar-confrontos` | Lista confrontos ativos. |
+| `/perfil` | Mostra as estatisticas do jogador. |
+| `/ranking` | Mostra o ranking dos times. |
+| `/relatorios` | Mostra resumo, confrontos e pools. |
+| `/resultado` | Registra o vencedor. |
+| `/setup-cargo` | Cria um cargo de time. |
 
-### Controle de Permissões
-- @Organization: acesso total a todos os comandos
-- Capitão: pode registrar resultados
-- Jogador: apenas comandos básicos (perfil, ranking)
+O painel pode ativar ou desativar cada comando por servidor. O estado padrao continua ativo. Essa configuracao nao altera nome, descricao, opcoes, permissao padrao nem registro no Discord.
 
----
+## Fluxo do confronto
 
-## Comandos Slash
+1. A staff seleciona uma pool e dois cargos de time.
+2. O bot cria o registro do confronto no canal existente.
+3. Um sorteio define qual time inicia o primeiro set de killer.
+4. Os times executam o pick/ban de killers.
+5. O bot apresenta o killer escolhido e o mapa presetado daquele set.
+6. O time inicial alterna nos sets seguintes.
+7. A staff registra o resultado e encerra o confronto.
 
-| Comando | Descrição | Permissão |
-|---------|-----------|-----------|
-| `/gerenciar-pool` | CRUD de pools (criar, listar, adicionar/remover mapas/killers) | Organization |
-| `/criar-confronto` | Cria um confronto entre dois times | Organization |
-| `/resultado` | Registra o vencedor do confronto | Organization |
-| `/encerrar` | Encerra um confronto e limpa canais | Organization |
-| `/listar-confrontos` | Lista confrontos ativos | Todos |
-| `/ranking` | Mostra ranking dos times | Todos |
-| `/perfil` | Mostra perfil e estatísticas | Todos |
-| `/setup-cargo` | Cria cargo de time | Organization |
-| `/gerenciar-cargo` | Gerencia cargos (renomear, deletar, membros) | Organization |
+Nao existe tempo limite automatico para a etapa de pick/ban. A staff pode encerrar manualmente um confronto travado.
 
----
+## Painel administrativo
 
-## Pools Iniciais (Queens Trials - All Win)
+O painel tem as seguintes areas:
 
-### Pool 1 - MD3
-**Mapas:** Azarov's Resting Place, Shelter Woods, Ormond Lake Mine
+- Visao geral: estado do bot, confrontos ativos, pools e atividade recente.
+- Confrontos: criacao em canal existente, resultado e encerramento.
+- Pools: criacao, mapas, killers, ativacao e exclusao.
+- Times: criacao e edicao de cargos, membros e cores.
+- Comandos: ativacao por servidor dos 11 comandos existentes.
+- Ranking: classificacao calculada a partir dos resultados.
+- Auditoria: autor, acao, entidade e horario.
 
-**Killers:** Oni, Nurse, Spirit, Krasue, Artist, Ghoul, Lich, Plague, Singularity
+Comandos customizados executaveis foram deixados fora desta versao. Criar novos slash commands mudaria o contrato atual, e comandos de texto exigiriam intent adicional. O modelo de dados reserva essa evolucao, mas nenhuma entrada enviada pelo painel executa JavaScript.
 
-### Pool 2 - MD3
-**Mapas:** Groaning Storehouse, Wrecker's Yard, Residencia da Familia (Yamaoka)
+## Arquitetura
 
-**Killers:** The Slasher, Animatronic, Mastermind, Deathslinger, Nightmare, The Executioner, Unknown, Nemesis, Houndmaster
-
-### Pool 3 - MD5
-**Mapas:** Wretched Shop, Midwich Elementary School, Suffocation Pit, Ironworks of Misery, Thompson's House
-
-**Killers:** Demogorgon, Dredge, Onryo, The First, Wraith, Hillbilly, Blight, Spirit, Pig, Knight, Legion
-
-### Pool 4 - MD5
-**Mapas:** Dead Dawg Saloon, Coal Tower, Lery's Memorial Institute, Blood Lodge, Toba Landing
-
-**Killers:** Clown, Good Guy, Cenobite, Ghost Face, Shape, Lich, Wraith, Dark Lord, Doctor, Krasue, The Slasher
-
----
-
-## Fluxo de Uso
-
-```
-1. Organization cria pools com /gerenciar-pool
-2. Organization cria cargos de time com /setup-cargo
-3. Organization cria confronto com /criar-confronto
-4. Bot inicia veto de mapas no canal de texto
-5. Times alternadamente banem mapas (botões)
-6. Bot inicia veto de killers
-7. Times alternadamente banem killers
-8. Mapa e killer definidos para o set
-9. Times jogam o set
-10. Organization registra vencedor com /resultado
-11. Organization encerra com /encerrar
+```text
+Discord Gateway
+      |
+      v
+Discord.js client ---- shared services ---- Prisma/SQLite
+      |                       ^
+      v                       |
+Fastify API <---- SSE ---- React panel
+      |
+Discord OAuth2 + encrypted server-side sessions
 ```
 
----
+Responsabilidades principais:
 
-## Tecnologias
+- `src/commands`: adaptadores dos comandos slash.
+- `src/services`: regras compartilhadas pelo Discord e pelo painel.
+- `src/systems`: fluxo de veto por set.
+- `src/web`: OAuth2, sessao, autorizacao, API, SSE e runtime Discord.
+- `panel`: aplicacao React e testes Playwright.
+- `prisma`: schema e migracoes.
+- `scripts`: migracao e inicializacao usadas na hospedagem.
 
-| Tecnologia | Versão | Uso |
-|------------|--------|-----|
-| Node.js | 22.x | Runtime |
-| TypeScript | 5.x | Linguagem |
-| Discord.js | 14.x | Framework Discord |
-| Prisma | 6.x | ORM |
-| SQLite | - | Banco de dados |
-| Discloud | - | Hospedagem |
+## Requisitos
 
----
+- Node.js 22 ou superior.
+- Aplicacao Discord com bot configurado.
+- SQLite local ou volume persistente na hospedagem.
+- Discloud Platinum para publicar o painel.
 
-## Estrutura do Projeto
+## Instalacao local
 
-```
-dark-bot/
-├── src/
-│   ├── index.ts              # Entry point
-│   ├── config.ts             # Cores e configurações
-│   ├── deploy-commands.ts    # Registro de slash commands
-│   ├── seed-pools.ts         # Seed das pools iniciais
-│   ├── types/
-│   │   └── index.ts          # Interfaces TypeScript
-│   ├── database/
-│   │   ├── schema.prisma     # Modelo de dados
-│   │   └── client.ts         # Conexão Prisma
-│   ├── commands/
-│   │   ├── criar-confronto.ts
-│   │   ├── resultado.ts
-│   │   ├── encerrar.ts
-│   │   ├── listar-confrontos.ts
-│   │   ├── ranking.ts
-│   │   ├── perfil.ts
-│   │   ├── setup-cargo.ts
-│   │   ├── gerenciar-cargo.ts
-│   │   └── gerenciar-pool.ts
-│   ├── systems/
-│   │   └── veto.ts           # Sistema de veto
-│   ├── events/
-│   │   ├── ready.ts
-│   │   ├── interactionCreate.ts
-│   │   └── voiceStateUpdate.ts
-│   └── utils/
-│       ├── permissions.ts
-│       ├── channels.ts
-│       └── embeds.ts
-├── prisma/
-│   └── schema.prisma
-├── .env.example
-├── .gitignore
-├── discloud.config
-├── package.json
-├── tsconfig.json
-├── start.bat
-├── stop.bat
-└── status.bat
+```powershell
+npm install
+Copy-Item .env.example .env
+npm run db:deploy
+npm run build
+npm start
 ```
 
----
+Para executar somente o bot, mantenha:
 
-## Instalação
+```env
+ADMIN_PANEL_ENABLED=false
+```
 
-### Pré-requisitos
+Para executar o painel local em `http://127.0.0.1:8080`, cadastre esse callback no Discord Developer Portal e configure:
 
-- [Node.js](https://nodejs.org/) 22.x ou superior
-- [Discord Developer Portal](https://discord.com/developers/applications) (criar bot)
-- [Discloud](https://discloud.com/) (para hospedagem)
+```env
+ADMIN_PANEL_ENABLED=true
+DISCORD_REDIRECT_URI=http://127.0.0.1:8080/api/auth/callback
+PORT=8080
+NODE_ENV=development
+```
 
-### Passos
+Os valores abaixo sao secretos e devem existir apenas no `.env` local ou no ambiente da hospedagem:
 
-1. **Clone o repositório**
-   ```bash
-   git clone https://github.com/Joaozinhown/dark-bot.git
-   cd dark-bot
-   ```
+- `DISCORD_TOKEN`
+- `DISCORD_CLIENT_SECRET`
+- `PANEL_COOKIE_SECRET`
+- `PANEL_ENCRYPTION_KEY`
 
-2. **Instale as dependências**
-   ```bash
-   npm install
-   ```
+Gere as chaves do painel com Node.js:
 
-3. **Configure o ambiente**
-   ```bash
-   cp .env.example .env
-   ```
-   Edite o arquivo `.env` com suas credenciais:
-   ```env
-   DISCORD_TOKEN=seu_token_aqui
-   CLIENT_ID=seu_bot_id_aqui
-   GUILD_ID=seu_servidor_id_aqui
-   DATABASE_URL=file:./prisma/darkbot.db
-   ```
+```powershell
+node -e "const c=require('node:crypto'); console.log('PANEL_COOKIE_SECRET='+c.randomBytes(48).toString('base64url')); console.log('PANEL_ENCRYPTION_KEY='+c.randomBytes(32).toString('base64'))"
+```
 
-4. **Configure o banco de dados**
-   ```bash
-   npx prisma db push
-   npx prisma generate
-   ```
+Nao publique a saida desse comando e nao a adicione ao Git.
 
-5. **Insira as pools iniciais**
-   ```bash
-   npx tsc
-   node dist/seed-pools.js
-   ```
+## Variaveis de ambiente
 
-6. **Registre os comandos slash**
-   ```bash
-   node dist/deploy-commands.js
-   ```
+| Variavel | Obrigatoria | Descricao |
+| --- | --- | --- |
+| `DISCORD_TOKEN` | Sim | Token do bot. |
+| `CLIENT_ID` | Sim | ID da aplicacao Discord. |
+| `GUILD_ID` | Atual | Servidor principal usado pelo fluxo de sincronizacao existente. |
+| `DATABASE_URL` | Sim | URL Prisma, normalmente `file:./prisma/darkbot.db`. |
+| `ADMIN_PANEL_ENABLED` | Nao | Ativa o painel somente quando for `true`. |
+| `DISCORD_CLIENT_SECRET` | Painel | Client secret OAuth2. |
+| `DISCORD_REDIRECT_URI` | Painel | Callback exato cadastrado no Discord. |
+| `PANEL_COOKIE_SECRET` | Painel | Segredo aleatorio com ao menos 32 caracteres. |
+| `PANEL_ENCRYPTION_KEY` | Painel | Exatamente 32 bytes em Base64. |
+| `PORT` | Hospedagem | Porta HTTP; na Discloud deve ser `8080`. |
+| `NODE_ENV` | Nao | Use `production` no deploy publico. |
 
-7. **Inicie o bot**
-   ```bash
-   node dist/index.js
-   ```
-
----
-
-## Deploy na Discloud
-
-1. **Instale a CLI**
-   ```bash
-   npm install -g discloud-cli
-   ```
-
-2. **Faça login**
-   ```bash
-   discloud --login
-   ```
-
-3. **Compile e faça upload**
-   ```bash
-   npx tsc
-   discloud up
-   ```
-
-4. **Verifique o status**
-   ```bash
-   discloud status
-   ```
-
----
+As variaveis existentes do bot nao precisam ser alteradas para desenvolver ou testar o painel desativado.
 
 ## Scripts
 
-| Script | Comando | Descrição |
-|--------|---------|-----------|
-| Iniciar | `start.bat` | Compila e inicia o bot em background |
-| Parar | `stop.bat` | Para todos os processos node.js |
-| Status | `status.bat` | Mostra status do bot |
-| Build | `npm run build` | Compila TypeScript |
-| Deploy | `npm run deploy` | Registra slash commands |
-| Dev | `npm run dev` | Inicia com hot reload (tsx) |
+| Comando | Resultado |
+| --- | --- |
+| `npm run dev` | Migra e executa o bot em watch mode. |
+| `npm run build` | Gera Prisma, compila o painel e o TypeScript. |
+| `npm run build:ts` | Compila somente o backend. |
+| `npm run panel:dev` | Executa o frontend Vite. |
+| `npm run panel:test:e2e` | Executa os testes Playwright. |
+| `npm test` | Executa testes unitarios, integracao e contratos. |
+| `npm run db:deploy` | Aplica migracoes pendentes. |
+| `npm run deploy:stage -- --output <diretorio>` | Prepara staging seguro fora do repositorio. |
+| `npm run deploy` | Registra comandos slash; nao use em uma atualizacao comum. |
 
----
+## Testes e qualidade
 
-## Modelo de Dados
+Antes de uma PR ou deploy:
 
-### Pool
-- `id`: ID único
-- `guildId`: ID do servidor
-- `nome`: Nome da pool
-- `formato`: MD3 ou MD5
-- `ativa`: Se a pool está ativa
+```powershell
+npm run build
+npm test
+npm run panel:test:e2e
+npm audit --omit=dev
+```
 
-### PoolMapa / PoolKiller
-- `poolId`: ID da pool
-- `nome`: Nome do mapa/killer
-- `ordem`: Ordem na pool
+O teste `src/tests/commands-contract.test.ts` deve continuar aprovando os 11 payloads. Qualquer mudanca nesse contrato exige uma decisao separada.
 
-### Confronto
-- `poolId`: Pool utilizada
-- `timeARoleId` / `timeBRoleId`: Cargos dos times
-- `status`: aguardando, veto, em_andamento, resultado, encerrado
-- `vencedor`: A ou B
+## Deploy na Discloud Platinum
 
-### VetoState
-- `tipo`: mapa ou killer
-- `vezDe`: A ou B
-- `mapasRestantes` / `killersRestantes`: JSON com itens disponíveis
+Bot com interface web e classificado pela Discloud como site. O corte de producao requer:
 
----
+- `TYPE=site`.
+- um `ID` igual ao subdominio reservado, sem `.discloud.app`.
+- `PORT=8080`.
+- bind em `0.0.0.0`, ja implementado.
+- callback `https://<subdominio>.discloud.app/api/auth/callback` no Discord.
 
-## Licença
+O procedimento completo, validacao e rollback estao em [docs/operations/admin-panel-platinum-runbook.md](docs/operations/admin-panel-platinum-runbook.md).
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+## Seguranca
 
----
+- OAuth2 usa Authorization Code, `state` assinado e scopes `identify guilds`.
+- Tokens OAuth ficam criptografados no banco com AES-256-GCM.
+- Sessao usa cookie assinado, `HttpOnly`, `SameSite` e `Secure` em producao.
+- Escritas exigem CSRF de dupla submissao e validacao Zod estrita.
+- Rate limit global e limite menor nas acoes administrativas.
+- Logs removem cookies, cabecalho Authorization e `Set-Cookie`.
+- Erros inesperados retornam mensagem generica ao navegador.
 
-## Contato
+O modelo de ameacas e os controles estao em [docs/security/admin-panel-threat-model.md](docs/security/admin-panel-threat-model.md).
 
-- **Discord:** [Dark Trials Arena](https://discord.gg/bnJJwvg4DY)
-- **Site:** [darktrialsarena.com](https://darktrialsarena.com)
-- **GitHub:** [@Joaozinhown](https://github.com/Joaozinhown)
+## Documentacao
 
----
+- [Plano de implementacao](docs/architecture/admin-panel-implementation.md)
+- [Runbook Platinum](docs/operations/admin-panel-platinum-runbook.md)
+- [Modelo de ameacas](docs/security/admin-panel-threat-model.md)
+- [Produto](PRODUCT.md)
+- [Design](DESIGN.md)
 
-<p align="center">
-  Feito com dedicação para a comunidade competitiva de Dead by Daylight
-</p>
+## Licenca
+
+MIT. Consulte [LICENSE](LICENSE).

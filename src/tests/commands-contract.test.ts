@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { data as configurarBot } from '../commands/configurar-bot';
 import { data as criarConfronto } from '../commands/criar-confronto';
@@ -58,4 +60,18 @@ test('keeps slash command descriptions, options and permissions unchanged', () =
     .digest('hex');
 
   assert.equal(payloadHash, EXPECTED_PAYLOAD_HASH);
+});
+
+test('deploy artifact contains only the approved slash command catalog', () => {
+  const commandsDirectory = path.resolve(__dirname, '..', 'commands');
+  const deployedNames = readdirSync(commandsDirectory)
+    .filter(file => file.endsWith('.js'))
+    .map(file => require(path.join(commandsDirectory, file)) as {
+      data?: { toJSON(): { name?: string } };
+    })
+    .map(command => command.data?.toJSON().name)
+    .filter((name): name is string => Boolean(name))
+    .sort((left, right) => left.localeCompare(right));
+
+  assert.deepEqual(deployedNames, EXPECTED_COMMAND_NAMES);
 });
