@@ -130,6 +130,7 @@ test('exposes health without authentication and protects API reads', async () =>
 
     assert.equal(health.statusCode, 200);
     assert.equal(health.json().data.botReady, true);
+    assert.equal(health.json().data.commandCount, 0);
     assert.equal(guilds.statusCode, 401);
     assert.equal(guilds.json().error.code, 'UNAUTHENTICATED');
   } finally {

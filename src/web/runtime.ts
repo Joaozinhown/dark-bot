@@ -56,6 +56,7 @@ interface PanelClient extends Client {
 export interface PanelRuntime {
   isReady(): boolean;
   getGuildCount(): number;
+  getCommandCount?(): number;
   listAuthorizedGuilds(userId: string, oauthGuilds: readonly DiscordOAuthGuild[]): Promise<AuthorizedGuild[]>;
   getOverview(guildId: string): Promise<unknown>;
   getRecentConfrontations(guildId: string): Promise<unknown[]>;
@@ -117,6 +118,7 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
   return {
     isReady: () => client.isReady(),
     getGuildCount: () => client.guilds.cache.size,
+    getCommandCount: () => client.commands?.size ?? 0,
 
     listAuthorizedGuilds(userId, oauthGuilds) {
       const accessService = createGuildAccessService({

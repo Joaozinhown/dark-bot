@@ -306,6 +306,7 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     status: options.runtime.isReady() ? 'ready' : 'starting',
     botReady: options.runtime.isReady(),
     guildCount: options.runtime.getGuildCount(),
+    commandCount: options.runtime.getCommandCount?.() ?? 0,
     uptimeSeconds: Math.floor(process.uptime()),
   }));
 

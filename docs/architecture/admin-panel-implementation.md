@@ -38,7 +38,7 @@ The Discloud Diamond deployment uses `TYPE=site`, port `8080`, `0.0.0.0` and a r
 | Administration P0 | Complete | Pools, teams, members, permissions, command toggles and confrontations. |
 | Live operations | Complete for current scope | SSE, reconnect, heartbeat, stream limits and health. |
 | Custom command templates | Deferred | Would require a new interaction contract or Message Content intent. |
-| Diamond deployment | Deployed | `dta-admin` is online; `admin-dta-bot` is reserved for a controlled URL migration. |
+| Diamond deployment | Cutover prepared | `admin-dta-bot` is the target Discloud subdomain; `dta-admin` remains the rollback app until validation. |
 
 ## Authorization model
 
