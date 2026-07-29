@@ -170,6 +170,7 @@ As variaveis existentes do bot nao precisam ser alteradas para desenvolver ou te
 | `npm run panel:test:e2e` | Executa os testes Playwright. |
 | `npm test` | Executa testes unitarios, integracao e contratos. |
 | `npm run db:deploy` | Aplica migracoes pendentes. |
+| `npm run deploy:stage -- --output <diretorio>` | Prepara staging seguro fora do repositorio. |
 | `npm run deploy` | Registra comandos slash; nao use em uma atualizacao comum. |
 
 ## Testes e qualidade

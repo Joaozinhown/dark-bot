@@ -129,17 +129,11 @@ O teste de contrato deve listar os 11 comandos aprovados. O diff de `src/command
 
 ## 7. Deploy
 
-O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. Monte um staging fora do repositorio usando somente o commit validado, depois acrescente os dois arquivos privados de forma explicita:
+O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O script de staging copia somente arquivos rastreados, gera um ignore que libera apenas `.env` e SQLite, acrescenta esses arquivos sem imprimir conteudo e recusa uma saida dentro do repositorio. Ele tambem valida `TYPE=site`, subdominio, RAM, callback, porta e segredos obrigatorios.
 
 ```powershell
 $stage = Join-Path $env:TEMP "dta-admin-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
-$archive = "$stage.zip"
-git archive --format=zip HEAD -o $archive
-Expand-Archive -LiteralPath $archive -DestinationPath $stage
-Move-Item -LiteralPath (Join-Path $stage '.discloudignore') -Destination "$stage.discloudignore.reference"
-Copy-Item -LiteralPath .env -Destination (Join-Path $stage '.env')
-New-Item -ItemType Directory -Path (Join-Path $stage 'prisma\prisma') -Force | Out-Null
-Copy-Item -LiteralPath prisma\prisma\darkbot.db -Destination (Join-Path $stage 'prisma\prisma\darkbot.db')
+npm run deploy:stage -- --output $stage
 ```
 
 Inspecione o staging sem imprimir o conteudo do `.env`:
