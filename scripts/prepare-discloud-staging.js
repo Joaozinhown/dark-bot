@@ -141,7 +141,12 @@ function assertPrivateRuntimeFile(projectRoot, filePath, label) {
 }
 
 function createStagingIgnore(projectRoot, outputDirectory) {
-  const source = readFileSync(path.join(projectRoot, '.discloudignore'), 'utf8');
+  const ignorePath = assertPrivateRuntimeFile(
+    projectRoot,
+    path.join(projectRoot, '.discloudignore'),
+    '.discloudignore',
+  );
+  const source = readFileSync(ignorePath, 'utf8');
   const rules = source.split(/\r?\n/)
     .filter(line => !PRIVATE_RUNTIME_IGNORE_RULES.has(line.trim()));
   const stagingRules = [...rules, STAGING_MARKER];

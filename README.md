@@ -171,6 +171,7 @@ As variaveis existentes do bot nao precisam ser alteradas para desenvolver ou te
 | `npm test` | Executa testes unitarios, integracao e contratos. |
 | `npm run db:deploy` | Aplica migracoes pendentes. |
 | `npm run deploy:stage -- --output <diretorio>` | Prepara staging seguro fora do repositorio. |
+| `npm run deploy:stage -- --cleanup <diretorio>` | Remove somente um staging temporario validado pelo marcador do script. |
 | `npm run deploy` | Registra comandos slash; nao use em uma atualizacao comum. |
 
 ## Testes e qualidade

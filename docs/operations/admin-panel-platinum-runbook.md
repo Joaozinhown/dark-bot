@@ -85,7 +85,7 @@ Get-ChildItem discloud\backups -Recurse -File
 git rev-parse HEAD
 ```
 
-Confirme que o backup tem `prisma/prisma/darkbot.db` e `.env`. Guarde o hash Git e o nome do arquivo de backup no registro do deploy.
+Confirme que o backup tem `prisma/prisma/darkbot.db` e `.env`. Guarde o hash Git e o nome do arquivo de backup no registro do deploy. Mantenha o backup em armazenamento local criptografado, com acesso restrito, e apague quando o periodo de retencao terminar.
 
 `discloud/backups/` deve permanecer ignorado por Git e pelo pacote Discloud. Verifique antes de continuar:
 
@@ -129,7 +129,7 @@ O teste de contrato deve listar os 11 comandos aprovados. O diff de `src/command
 
 ## 7. Deploy
 
-O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O script de staging copia somente arquivos rastreados, gera um ignore que libera apenas `.env` e SQLite, acrescenta esses arquivos sem imprimir conteudo e recusa uma saida dentro do repositorio. Ele tambem valida `TYPE=site`, subdominio, RAM, callback, porta e segredos obrigatorios.
+O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O script de staging exige uma arvore Git limpa, copia somente arquivos rastreados, gera um ignore que libera apenas `.env` e SQLite, acrescenta esses arquivos sem imprimir conteudo e aceita saida somente no diretorio temporario do sistema. Ele tambem bloqueia junctions e links simbolicos, valida `TYPE=site`, subdominio, RAM, callback, porta e segredos obrigatorios.
 
 ```powershell
 $stage = Join-Path $env:TEMP "dta-admin-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
@@ -151,8 +151,11 @@ try {
   discloud app commit 1785101572014
 } finally {
   Pop-Location
+  npm run deploy:stage -- --cleanup $stage
 }
 ```
+
+O `finally` remove o `.env` e o banco temporarios mesmo quando o upload falha. A limpeza recusa diretorios sem o marcador privado criado pelo script.
 
 Se a plataforma recusar a conversao de `bot` para `site`, nao apague o app atual. Pare o procedimento e use o fluxo de upload de site somente depois de confirmar que o backup pode ser restaurado no novo app.
 

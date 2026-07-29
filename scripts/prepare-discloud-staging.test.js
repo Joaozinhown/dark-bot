@@ -60,6 +60,7 @@ test('creates a staging directory with private runtime files and a safe ignore f
     const stagingIgnore = readFileSync(path.join(fixture.output, '.discloudignore'), 'utf8');
     assert.doesNotMatch(stagingIgnore, /^\.env$/m);
     assert.doesNotMatch(stagingIgnore, /^\*\.db$/m);
+    assert.match(stagingIgnore, /^\.dta-discloud-staging$/m);
     cleanupStaging({ projectRoot: fixture.project, outputDirectory: fixture.output });
     assert.equal(existsSync(fixture.output), false);
   } finally {
@@ -117,6 +118,29 @@ test('requires a clean Git working tree before collecting deploy files', () => {
     assert.throws(() => readCleanTrackedFiles(root), /working tree must be clean/i);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rejects a tracked symbolic link even when its target is a regular file', t => {
+  const fixture = createFixture();
+  try {
+    const linkPath = path.join(fixture.project, 'src', 'linked.ts');
+    try {
+      symlinkSync(path.join(fixture.project, 'src', 'index.ts'), linkPath, 'file');
+    } catch {
+      t.skip('symbolic link creation is unavailable');
+      return;
+    }
+
+    assert.throws(() => prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath: path.join(fixture.project, '.env'),
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/linked.ts', 'discloud.config'],
+    }), /symbolic link/i);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
   }
 });
 
