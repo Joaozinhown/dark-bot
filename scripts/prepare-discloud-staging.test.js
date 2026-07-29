@@ -10,8 +10,8 @@ const {
   readCleanTrackedFiles,
 } = require('./prepare-discloud-staging');
 
-function createFixture() {
-  const root = mkdtempSync(path.join(tmpdir(), 'dta-stage-test-'));
+function createFixture(baseDirectory = tmpdir()) {
+  const root = mkdtempSync(path.join(baseDirectory, 'dta-stage-test-'));
   const project = path.join(root, 'project');
   const output = path.join(root, 'output');
   mkdirSync(path.join(project, 'src'), { recursive: true });
@@ -41,6 +41,28 @@ function createFixture() {
   writeFileSync(path.join(project, 'prisma', 'prisma', 'darkbot.db'), 'database');
   return { root, project, output };
 }
+
+test('accepts the long Windows form of the system temporary directory', t => {
+  if (process.platform !== 'win32' || !process.env.LOCALAPPDATA) {
+    t.skip('Windows long temporary path is unavailable');
+    return;
+  }
+  const fixture = createFixture(path.join(process.env.LOCALAPPDATA, 'Temp'));
+  try {
+    const result = prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath: path.join(fixture.project, '.env'),
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    });
+
+    assert.equal(result.outputDirectory, fixture.output);
+    cleanupStaging({ projectRoot: fixture.project, outputDirectory: fixture.output });
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
 
 test('creates a staging directory with private runtime files and a safe ignore file', () => {
   const fixture = createFixture();

@@ -54,13 +54,13 @@ function isInside(parent, candidate) {
 
 function assertOutsideRepository(projectRoot, outputDirectory) {
   if (existsSync(outputDirectory)) throw new Error('Staging output already exists.');
-  const physicalProjectRoot = realpathSync(projectRoot);
-  const physicalParent = realpathSync(path.dirname(outputDirectory));
+  const physicalProjectRoot = realpathSync.native(projectRoot);
+  const physicalParent = realpathSync.native(path.dirname(outputDirectory));
   const physicalOutput = path.join(physicalParent, path.basename(outputDirectory));
   if (isInside(physicalProjectRoot, physicalOutput)) {
     throw new Error('Staging output must be outside the repository.');
   }
-  if (!isInside(realpathSync(tmpdir()), physicalOutput)) {
+  if (!isInside(realpathSync.native(tmpdir()), physicalOutput)) {
     throw new Error('Staging output must be inside the operating system temporary directory.');
   }
 }
@@ -123,8 +123,8 @@ function safeTrackedPath(projectRoot, relativePath) {
   }
   const sourceStats = lstatSync(source);
   if (sourceStats.isSymbolicLink()) throw new Error(`Tracked path cannot be a symbolic link: ${relativePath}`);
-  const physicalSource = realpathSync(source);
-  if (!isInside(realpathSync(projectRoot), physicalSource)) {
+  const physicalSource = realpathSync.native(source);
+  if (!isInside(realpathSync.native(projectRoot), physicalSource)) {
     throw new Error(`Tracked path escapes repository: ${relativePath}`);
   }
   if (!statSync(physicalSource).isFile()) throw new Error(`Tracked path is not a file: ${relativePath}`);
@@ -133,8 +133,8 @@ function safeTrackedPath(projectRoot, relativePath) {
 
 function assertPrivateRuntimeFile(projectRoot, filePath, label) {
   if (lstatSync(filePath).isSymbolicLink()) throw new Error(`${label} cannot be a symbolic link.`);
-  const physicalPath = realpathSync(filePath);
-  if (!isInside(realpathSync(projectRoot), physicalPath) || !statSync(physicalPath).isFile()) {
+  const physicalPath = realpathSync.native(filePath);
+  if (!isInside(realpathSync.native(projectRoot), physicalPath) || !statSync(physicalPath).isFile()) {
     throw new Error(`${label} must be a file inside the repository.`);
   }
   return physicalPath;
@@ -166,13 +166,13 @@ function readCleanTrackedFiles(projectRoot) {
 }
 
 function cleanupStaging(options) {
-  const projectRoot = realpathSync(path.resolve(options.projectRoot));
+  const projectRoot = realpathSync.native(path.resolve(options.projectRoot));
   const outputDirectory = path.resolve(options.outputDirectory);
   if (!existsSync(outputDirectory) || lstatSync(outputDirectory).isSymbolicLink()) {
     throw new Error('Path is not a DTA staging directory.');
   }
-  const physicalOutput = realpathSync(outputDirectory);
-  if (isInside(projectRoot, physicalOutput) || !isInside(realpathSync(tmpdir()), physicalOutput)) {
+  const physicalOutput = realpathSync.native(outputDirectory);
+  if (isInside(projectRoot, physicalOutput) || !isInside(realpathSync.native(tmpdir()), physicalOutput)) {
     throw new Error('Refusing to clean a staging directory outside the safe temporary boundary.');
   }
   const markerPath = path.join(physicalOutput, STAGING_MARKER);
