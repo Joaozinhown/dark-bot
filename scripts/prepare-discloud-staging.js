@@ -4,6 +4,7 @@ const {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -35,6 +36,9 @@ const PRIVATE_RUNTIME_IGNORE_RULES = new Set([
   '*.db-journal',
   '*.db-wal',
   '*.db-shm',
+  'build/',
+  'dist/',
+  'panel/dist/',
 ]);
 
 function parseKeyValueFile(contents) {
@@ -153,6 +157,36 @@ function createStagingIgnore(projectRoot, outputDirectory) {
   writeFileSync(path.join(outputDirectory, '.discloudignore'), `${stagingRules.join('\n').trimEnd()}\n`);
 }
 
+function copyArtifactDirectory(projectRoot, relativeDirectory, outputDirectory) {
+  const physicalProjectRoot = realpathSync.native(projectRoot);
+  const sourceRoot = path.join(projectRoot, relativeDirectory);
+
+  function copyEntry(source, destination) {
+    const entryStats = lstatSync(source);
+    if (entryStats.isSymbolicLink()) {
+      throw new Error(`Build artifact cannot be a symbolic link: ${path.relative(projectRoot, source)}`);
+    }
+    const physicalSource = realpathSync.native(source);
+    if (!isInside(physicalProjectRoot, physicalSource)) {
+      throw new Error(`Build artifact escapes repository: ${path.relative(projectRoot, source)}`);
+    }
+    if (entryStats.isDirectory()) {
+      mkdirSync(destination, { recursive: true });
+      for (const entry of readdirSync(source)) {
+        copyEntry(path.join(source, entry), path.join(destination, entry));
+      }
+      return;
+    }
+    if (!entryStats.isFile()) {
+      throw new Error(`Unsupported build artifact: ${path.relative(projectRoot, source)}`);
+    }
+    mkdirSync(path.dirname(destination), { recursive: true });
+    copyFileSync(physicalSource, destination);
+  }
+
+  copyEntry(sourceRoot, path.join(outputDirectory, relativeDirectory));
+}
+
 function readCleanTrackedFiles(projectRoot) {
   const gitStatus = execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], {
     cwd: projectRoot,
@@ -208,6 +242,8 @@ function prepareStaging(options) {
       mkdirSync(path.dirname(destination), { recursive: true });
       copyFileSync(file.source, destination);
     }
+    copyArtifactDirectory(projectRoot, 'build', outputDirectory);
+    copyArtifactDirectory(projectRoot, path.join('panel', 'dist'), outputDirectory);
     createStagingIgnore(projectRoot, outputDirectory);
     copyFileSync(safeEnvPath, path.join(outputDirectory, '.env'));
     const databaseDestination = path.join(outputDirectory, 'prisma', 'prisma', 'darkbot.db');
@@ -226,6 +262,15 @@ function readArgument(name) {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
+function buildProject(projectRoot) {
+  const npmCliPath = process.env.npm_execpath;
+  if (!npmCliPath) throw new Error('Run staging through npm run deploy:stage so the project can be built.');
+  execFileSync(process.execPath, [npmCliPath, 'run', 'build'], {
+    cwd: projectRoot,
+    stdio: 'inherit',
+  });
+}
+
 function runCli() {
   const projectRoot = path.resolve(__dirname, '..');
   const cleanupDirectory = readArgument('--cleanup');
@@ -238,11 +283,18 @@ function runCli() {
   if (!outputDirectory) {
     throw new Error('Usage: node scripts/prepare-discloud-staging.js --output <path> | --cleanup <path>');
   }
+  const trackedFiles = readCleanTrackedFiles(projectRoot);
+  buildProject(projectRoot);
+  const verifiedTrackedFiles = readCleanTrackedFiles(projectRoot);
+  if (trackedFiles.join('\0') !== verifiedTrackedFiles.join('\0')) {
+    throw new Error('Tracked file set changed while building the deployment package.');
+  }
   const result = prepareStaging({
     projectRoot,
     outputDirectory,
     envPath: readArgument('--env') ?? path.join(projectRoot, '.env'),
     databasePath: readArgument('--database') ?? path.join(projectRoot, 'prisma', 'prisma', 'darkbot.db'),
+    trackedFiles,
   });
   process.stdout.write(`Staging ready: ${result.outputDirectory}\n`);
   process.stdout.write(`Tracked files copied: ${result.trackedFileCount}\n`);

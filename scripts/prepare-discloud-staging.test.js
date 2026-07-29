@@ -15,8 +15,12 @@ function createFixture(baseDirectory = tmpdir()) {
   const project = path.join(root, 'project');
   const output = path.join(root, 'output');
   mkdirSync(path.join(project, 'src'), { recursive: true });
+  mkdirSync(path.join(project, 'build'), { recursive: true });
+  mkdirSync(path.join(project, 'panel', 'dist'), { recursive: true });
   mkdirSync(path.join(project, 'prisma', 'prisma'), { recursive: true });
   writeFileSync(path.join(project, 'src', 'index.ts'), 'export {};');
+  writeFileSync(path.join(project, 'build', 'index.js'), '"use strict";');
+  writeFileSync(path.join(project, 'panel', 'dist', 'index.html'), '<main>DTA</main>');
   writeFileSync(path.join(project, '.discloudignore'), '.env\n*.db\n');
   writeFileSync(path.join(project, 'discloud.config'), [
     'NAME=Dark Bot',
@@ -77,6 +81,8 @@ test('creates a staging directory with private runtime files and a safe ignore f
 
     assert.equal(result.trackedFileCount, 2);
     assert.equal(readFileSync(path.join(fixture.output, 'src', 'index.ts'), 'utf8'), 'export {};');
+    assert.equal(readFileSync(path.join(fixture.output, 'build', 'index.js'), 'utf8'), '"use strict";');
+    assert.equal(readFileSync(path.join(fixture.output, 'panel', 'dist', 'index.html'), 'utf8'), '<main>DTA</main>');
     assert.equal(readFileSync(path.join(fixture.output, '.env'), 'utf8').includes('s'.repeat(32)), true);
     assert.equal(readFileSync(path.join(fixture.output, 'prisma', 'prisma', 'darkbot.db'), 'utf8'), 'database');
     const stagingIgnore = readFileSync(path.join(fixture.output, '.discloudignore'), 'utf8');
@@ -107,6 +113,28 @@ test('refuses an output path physically redirected into the repository', t => {
       databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
       trackedFiles: ['src/index.ts', 'discloud.config'],
     }), /outside the repository/i);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('refuses a junction inside generated build artifacts', t => {
+  const fixture = createFixture();
+  try {
+    const junction = path.join(fixture.project, 'build', 'linked');
+    try {
+      symlinkSync(path.join(fixture.project, 'src'), junction, 'junction');
+    } catch {
+      t.skip('junction creation is unavailable');
+      return;
+    }
+    assert.throws(() => prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath: path.join(fixture.project, '.env'),
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    }), /build artifact cannot be a symbolic link/i);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

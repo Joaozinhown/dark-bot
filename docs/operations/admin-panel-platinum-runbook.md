@@ -144,7 +144,7 @@ O teste de contrato deve listar os 11 comandos aprovados. O diff de `src/command
 
 ## 7. Deploy
 
-O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O script de staging exige uma arvore Git limpa, copia somente arquivos rastreados, gera um ignore que libera apenas `.env` e SQLite, acrescenta esses arquivos sem imprimir conteudo e aceita saida somente no diretorio temporario do sistema. Ele tambem bloqueia junctions e links simbolicos, valida `TYPE=site`, subdominio, RAM, callback, porta e segredos obrigatorios.
+O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O script de staging exige uma arvore Git limpa, executa o build local, copia os arquivos rastreados e acrescenta `build/`, `panel/dist/`, `.env` e SQLite sem imprimir segredos. A saida so pode ficar no diretorio temporario do sistema. O script bloqueia junctions e links simbolicos, valida `TYPE=site`, subdominio, RAM, callback, porta e segredos obrigatorios. Os artefatos compilados precisam estar no pacote porque `discloud app commit` atualiza os arquivos, mas pode preservar o `build/` anterior sem executar `BUILD`.
 
 ```powershell
 $stage = Join-Path $env:TEMP "dta-admin-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
