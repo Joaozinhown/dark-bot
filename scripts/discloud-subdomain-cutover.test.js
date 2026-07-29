@@ -1,10 +1,28 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
+  buildSpawnInvocation,
   isTargetHealthReady,
   parseAppState,
   runCutover,
 } = require('./discloud-subdomain-cutover');
+
+test('runs the Windows Discloud JavaScript entrypoint without a command shell', () => {
+  const entrypoint = String.raw`C:\Users\tester\AppData\Roaming\npm\node_modules\discloud-cli\bin\discloud`;
+  const invocation = buildSpawnInvocation(
+    'discloud',
+    ['app', 'status', 'dta-admin'],
+    'win32',
+    () => entrypoint,
+  );
+  assert.equal(invocation.command, process.execPath);
+  assert.deepEqual(invocation.args, [
+    entrypoint,
+    'app',
+    'status',
+    'dta-admin',
+  ]);
+});
 
 function createDependencies(overrides = {}) {
   const events = [];
