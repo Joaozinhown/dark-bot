@@ -1,6 +1,9 @@
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import Fastify, {
   LogController,
   type FastifyInstance,
@@ -369,6 +372,27 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     request.raw.on('close', closeStream);
     return reply;
   });
+
+  const panelRoot = path.resolve(process.cwd(), 'panel', 'dist');
+  if (existsSync(path.join(panelRoot, 'index.html'))) {
+    await app.register(fastifyStatic, {
+      root: panelRoot,
+      wildcard: false,
+      maxAge: '30d',
+      immutable: true,
+      setHeaders(response, filePath) {
+        if (path.basename(filePath) === 'index.html') {
+          response.header('Cache-Control', 'no-cache');
+        }
+      },
+    });
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/') || request.url === '/health') {
+        return sendError(reply, 404, 'NOT_FOUND', 'Recurso nao encontrado.');
+      }
+      return reply.sendFile('index.html', { maxAge: 0, immutable: false });
+    });
+  }
 
   app.setErrorHandler((error, _request, reply) => {
     app.log.error({ err: error }, 'Web request failed');
