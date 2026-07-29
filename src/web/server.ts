@@ -17,6 +17,7 @@ import { DiscordOAuthError, type DiscordOAuthGuild as OAuthGuild } from './auth/
 import type { EnabledPanelConfig } from './config';
 import { guildEventBus, type GuildEventBus } from './realtime/event-bus';
 import type { PanelRuntime } from './runtime';
+import { panelActionSchema, PanelActionError } from './panel-actions';
 
 const SESSION_COOKIE = 'dta_session';
 const CSRF_COOKIE = 'dta_csrf';
@@ -134,6 +135,20 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     max: 120,
     timeWindow: '1 minute',
     keyGenerator: request => request.ip,
+  });
+
+  app.setErrorHandler((error, _request, reply) => {
+    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
+      ? Number(error.statusCode)
+      : 500;
+    if (error instanceof PanelActionError) {
+      return sendError(reply, error.statusCode, error.code, error.message);
+    }
+    if (statusCode === 429) {
+      return sendError(reply, 429, 'RATE_LIMITED', 'Muitas requisicoes. Tente novamente.');
+    }
+    app.log.error({ err: error }, 'Web request failed');
+    return sendError(reply, 500, 'INTERNAL_ERROR', 'Erro interno.');
   });
 
   function readSignedCookie(request: FastifyRequest, name: string): string | null {
@@ -315,8 +330,10 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     ['pools', guildId => options.runtime.getPools(guildId)],
     ['ranking', guildId => options.runtime.getRanking(guildId)],
     ['teams', guildId => options.runtime.getTeams(guildId)],
-    ['commands', () => options.runtime.getCommands()],
+    ['commands', guildId => options.runtime.getCommands(guildId)],
     ['audit', guildId => options.runtime.getAudit(guildId)],
+    ['pool-details', guildId => options.runtime.getPoolDetails(guildId)],
+    ['management', guildId => options.runtime.getManagement(guildId)],
   ];
   for (const [resource, load] of guildReads) {
     app.get<{ Params: { guildId: string } }>(`/api/guilds/:guildId/${resource}`, async (request, reply) => {
@@ -324,6 +341,23 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       return access ? sendData(reply, await load(access.guild.id)) : reply;
     });
   }
+
+  app.post<{ Params: { guildId: string }; Body: unknown }>('/api/guilds/:guildId/actions', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access || !(await requireCsrf(request, reply, access.auth))) return reply;
+    const parsed = panelActionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Dados da acao invalidos.');
+    }
+    const result = await options.runtime.executeAction(
+      access.guild.id,
+      access.auth.session.userId,
+      parsed.data,
+    );
+    return sendData(reply, result);
+  });
 
   app.get<{ Params: { guildId: string } }>('/api/guilds/:guildId/events', async (request, reply) => {
     const access = await requireGuild(request, reply);
@@ -393,17 +427,6 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       return reply.sendFile('index.html', { maxAge: 0, immutable: false });
     });
   }
-
-  app.setErrorHandler((error, _request, reply) => {
-    app.log.error({ err: error }, 'Web request failed');
-    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
-      ? Number(error.statusCode)
-      : 500;
-    if (statusCode === 429) {
-      return sendError(reply, 429, 'RATE_LIMITED', 'Muitas requisicoes. Tente novamente.');
-    }
-    return sendError(reply, 500, 'INTERNAL_ERROR', 'Erro interno.');
-  });
 
   return app;
 }

@@ -1,16 +1,19 @@
 import { Command as CommandIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { MutationFeedback } from '../components/admin-dialog';
 import { PageHeader } from '../components/page-header';
 import { RefreshButton, ResultsCount, SearchField } from '../components/data-tools';
 import { EmptyState, ErrorState, LoadingState } from '../components/query-state';
 import { StatusBadge } from '../components/status-badge';
 import { useGuildContext } from '../context/guild-context';
-import { useCommands } from '../hooks/use-panel-data';
+import { useCommands, usePanelAction } from '../hooks/use-panel-data';
 
 export function CommandsPage() {
   const { selectedGuildId } = useGuildContext();
   const query = useCommands(selectedGuildId);
+  const action = usePanelAction(selectedGuildId);
   const [search, setSearch] = useState('');
+  const [success, setSuccess] = useState<string | null>(null);
   const filtered = useMemo(() => (query.data ?? []).filter(command => (
     `${command.name} ${command.description}`.toLowerCase().includes(search.toLowerCase())
   )), [query.data, search]);
@@ -19,10 +22,11 @@ export function CommandsPage() {
     <div className="page">
       <PageHeader
         title="Comandos"
-        description="Catálogo de comandos slash registrados no Dark Bot."
+        description="Controle a disponibilidade dos comandos slash registrados no Dark Bot."
         actions={<RefreshButton onRefresh={() => void query.refetch()} isRefreshing={query.isFetching} />}
       />
-      <div className="read-only-note"><CommandIcon aria-hidden="true" /><span>Visualização somente leitura. O painel não altera o catálogo atual de comandos slash.</span></div>
+      <div className="read-only-note"><CommandIcon aria-hidden="true" /><span>Esta configuração não muda nomes, opções nem o registro dos comandos slash.</span></div>
+      <MutationFeedback error={action.error} success={success} />
       <div className="table-toolbar">
         <SearchField value={search} onChange={setSearch} label="Buscar comando" placeholder="Buscar comando ou descrição" />
         <ResultsCount count={filtered.length} singular="comando" plural="comandos" />
@@ -32,10 +36,29 @@ export function CommandsPage() {
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhum comando encontrado" description="Revise o texto usado na busca." icon={<CommandIcon aria-hidden="true" />} /> : null}
         {filtered.length > 0 ? <div className="table-scroll"><table>
-          <thead><tr><th>Comando</th><th>Descrição</th><th>Registro</th></tr></thead>
+          <thead><tr><th>Comando</th><th>Descrição</th><th>Registro</th><th>Disponibilidade</th></tr></thead>
           <tbody>{filtered.map(command => <tr key={command.name}>
-            <td><code className="command-name">/{command.name}</code></td><td>{command.description || 'Sem descrição informada'}</td>
+            <td><code className="command-name">/{command.name}</code></td>
+            <td>{command.description || 'Sem descrição informada'}</td>
             <td><StatusBadge status="ativo" label="Registrado" /></td>
+            <td><label className="switch-control">
+              <input
+                type="checkbox"
+                checked={command.enabled !== false}
+                disabled={action.isPending}
+                onChange={event => {
+                  setSuccess(null);
+                  action.mutate({
+                    type: 'command.set-enabled',
+                    commandName: command.name,
+                    enabled: event.target.checked,
+                  }, {
+                    onSuccess: () => setSuccess(`/${command.name} atualizado neste servidor.`),
+                  });
+                }}
+              />
+              <span>{command.enabled === false ? 'Desativado' : 'Ativado'}</span>
+            </label></td>
           </tr>)}</tbody>
         </table></div> : null}
       </section>

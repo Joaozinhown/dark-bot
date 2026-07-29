@@ -20,6 +20,10 @@ import {
 } from './startup';
 import { createErrorEmbed } from './utils/embeds';
 import { hasBotAdminPermission } from './utils/permissions';
+import {
+  createCommandSettingService,
+  prismaCommandSettingStore,
+} from './services/command-setting-service';
 import { createDiscordOAuthClient } from './web/auth/discord-oauth';
 import { createSessionService } from './web/auth/session-service';
 import { readPanelConfig, type EnabledPanelConfig } from './web/config';
@@ -189,6 +193,20 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   try {
+    if (interaction.guildId) {
+      const commandSettings = createCommandSettingService(
+        prismaCommandSettingStore,
+        [...client.commands.keys()],
+      );
+      if (!(await commandSettings.isEnabled(interaction.guildId, interaction.commandName))) {
+        await interaction.reply({
+          embeds: [createErrorEmbed('Este comando esta desativado neste servidor.')],
+          flags: 64,
+        });
+        return;
+      }
+    }
+
     if (ADMIN_COMMANDS.has(interaction.commandName)) {
       const member = interaction.member instanceof GuildMember ? interaction.member : null;
       const canUseCommand = member ? await hasBotAdminPermission(member) : false;

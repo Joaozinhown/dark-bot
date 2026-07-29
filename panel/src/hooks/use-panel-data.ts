@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { panelApi } from '../lib/api';
-import type { GuildResource } from '../types/api';
+import type { GuildResource, PanelAction } from '../types/api';
 
 export const queryKeys = {
   health: ['health'] as const,
@@ -103,5 +103,33 @@ export function useAudit(guildId: string) {
     queryFn: () => panelApi.audit(guildId),
     enabled: Boolean(guildId),
     ...guildQueryOptions,
+  });
+}
+
+export function usePoolDetails(guildId: string) {
+  return useQuery({
+    queryKey: queryKeys.guild(guildId, 'pool-details'),
+    queryFn: () => panelApi.poolDetails(guildId),
+    enabled: Boolean(guildId),
+    ...guildQueryOptions,
+  });
+}
+
+export function useManagement(guildId: string) {
+  return useQuery({
+    queryKey: queryKeys.guild(guildId, 'management'),
+    queryFn: () => panelApi.management(guildId),
+    enabled: Boolean(guildId),
+    ...guildQueryOptions,
+  });
+}
+
+export function usePanelAction(guildId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (action: PanelAction) => panelApi.action(guildId, action),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['guild', guildId] });
+    },
   });
 }

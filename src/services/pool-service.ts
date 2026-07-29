@@ -24,6 +24,7 @@ export interface PoolStore {
   createPool(input: { guildId: string; nome: string; formato: string }): Promise<PoolRecord>;
   findPool(poolId: number): Promise<PoolWithItems | null>;
   listActivePools(guildId: string): Promise<PoolWithItems[]>;
+  listPools(guildId: string): Promise<PoolWithItems[]>;
   createMap(input: { poolId: number; nome: string; ordem: number }): Promise<PoolItem>;
   deleteMap(itemId: number): Promise<void>;
   createKiller(input: { poolId: number; nome: string; ordem: number }): Promise<PoolItem>;
@@ -105,6 +106,10 @@ export function createPoolService(store: PoolStore) {
       return store.listActivePools(guildId);
     },
 
+    listAll(guildId: string) {
+      return store.listPools(guildId);
+    },
+
     async delete(guildId: string, poolId: number): Promise<PoolResult<{ pool: PoolWithItems }>> {
       const pool = poolForGuild(await store.findPool(poolId), guildId);
       if (!pool) return { ok: false, reason: 'POOL_NOT_FOUND' };
@@ -132,6 +137,14 @@ const prismaPoolStore: PoolStore = {
   }),
   listActivePools: guildId => prisma.pool.findMany({
     where: { guildId, ativa: true },
+    include: {
+      mapas: { orderBy: { ordem: 'asc' } },
+      killers: { orderBy: { ordem: 'asc' } },
+    },
+    orderBy: { id: 'asc' },
+  }),
+  listPools: guildId => prisma.pool.findMany({
+    where: { guildId },
     include: {
       mapas: { orderBy: { ordem: 'asc' } },
       killers: { orderBy: { ordem: 'asc' } },

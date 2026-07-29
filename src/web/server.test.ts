@@ -4,6 +4,7 @@ import type { EnabledPanelConfig } from './config';
 import { DiscordOAuthError } from './auth/discord-oauth';
 import { createWebApp, type OAuthClientContract, type PublicSession, type SessionServiceContract } from './server';
 import type { PanelRuntime } from './runtime';
+import { PanelActionError } from './panel-actions';
 
 const config: EnabledPanelConfig = {
   enabled: true,
@@ -97,6 +98,9 @@ function createDependencies() {
     async getTeams() { return []; },
     async getCommands() { return []; },
     async getAudit() { return []; },
+    async getPoolDetails() { return []; },
+    async getManagement() { return { roles: [], channels: [], adminRoleIds: [] }; },
+    async executeAction(guildId, actorUserId, action) { return { guildId, actorUserId, action }; },
   };
   return { oauth, sessions, runtime };
 }
@@ -181,6 +185,90 @@ test('requires double-submit CSRF before logout', async () => {
 
     assert.equal(blocked.statusCode, 403);
     assert.equal(loggedOut.statusCode, 204);
+  } finally {
+    await app.close();
+  }
+});
+
+test('validates, authorizes and protects administrative actions with CSRF', async () => {
+  const app = await createWebApp({ config, ...createDependencies() });
+  try {
+    const login = await app.inject({ method: 'GET', url: '/api/auth/login' });
+    const state = new URL(login.headers.location!).searchParams.get('state')!;
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/api/auth/callback?code=code&state=${encodeURIComponent(state)}`,
+      headers: { cookie: cookiePair(login.headers['set-cookie'], 'dta_oauth_state') },
+    });
+    const cookies = [
+      cookiePair(callback.headers['set-cookie'], 'dta_session'),
+      cookiePair(callback.headers['set-cookie'], 'dta_csrf'),
+    ].join('; ');
+    const body = { type: 'command.set-enabled', commandName: 'ranking', enabled: false };
+
+    const noCsrf = await app.inject({
+      method: 'POST', url: '/api/guilds/guild-a/actions', headers: { cookie: cookies }, payload: body,
+    });
+    const malformed = await app.inject({
+      method: 'POST',
+      url: '/api/guilds/guild-a/actions',
+      headers: { cookie: cookies, 'x-csrf-token': 'csrf-token' },
+      payload: { type: 'command.create', name: 'unsafe' },
+    });
+    const allowed = await app.inject({
+      method: 'POST',
+      url: '/api/guilds/guild-a/actions',
+      headers: { cookie: cookies, 'x-csrf-token': 'csrf-token' },
+      payload: body,
+    });
+    const forbidden = await app.inject({
+      method: 'POST',
+      url: '/api/guilds/guild-b/actions',
+      headers: { cookie: cookies, 'x-csrf-token': 'csrf-token' },
+      payload: body,
+    });
+
+    assert.equal(noCsrf.statusCode, 403);
+    assert.equal(malformed.statusCode, 400);
+    assert.equal(malformed.json().error.code, 'VALIDATION_ERROR');
+    assert.equal(allowed.statusCode, 200);
+    assert.equal(allowed.json().data.actorUserId, 'user-1');
+    assert.deepEqual(allowed.json().data.action, body);
+    assert.equal(forbidden.statusCode, 403);
+  } finally {
+    await app.close();
+  }
+});
+
+test('returns safe domain errors from administrative actions', async () => {
+  const dependencies = createDependencies();
+  dependencies.runtime.executeAction = async () => {
+    throw new PanelActionError('ROLE_NOT_EDITABLE', 'O bot nao pode gerenciar este cargo.', 409);
+  };
+  const app = await createWebApp({ config, ...dependencies });
+  try {
+    const login = await app.inject({ method: 'GET', url: '/api/auth/login' });
+    const state = new URL(login.headers.location!).searchParams.get('state')!;
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/api/auth/callback?code=code&state=${encodeURIComponent(state)}`,
+      headers: { cookie: cookiePair(login.headers['set-cookie'], 'dta_oauth_state') },
+    });
+    const cookies = [
+      cookiePair(callback.headers['set-cookie'], 'dta_session'),
+      cookiePair(callback.headers['set-cookie'], 'dta_csrf'),
+    ].join('; ');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/guilds/guild-a/actions',
+      headers: { cookie: cookies, 'x-csrf-token': 'csrf-token' },
+      payload: { type: 'team.delete', roleId: '123456789012345678' },
+    });
+
+    assert.equal(response.statusCode, 409);
+    const payload = response.json();
+    assert.equal(payload.error.code, 'ROLE_NOT_EDITABLE', JSON.stringify(payload));
+    assert.equal(payload.error.message, 'O bot nao pode gerenciar este cargo.');
   } finally {
     await app.close();
   }

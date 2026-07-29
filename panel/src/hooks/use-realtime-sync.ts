@@ -42,6 +42,23 @@ export function useRealtimeSync(guildId: string): RealtimeState {
       'role.updated',
       'command.updated',
       'bot.ready',
+      'pool.create',
+      'pool.add-map',
+      'pool.remove-map',
+      'pool.add-killer',
+      'pool.remove-killer',
+      'pool.toggle',
+      'pool.delete',
+      'team.create',
+      'team.rename',
+      'team.delete',
+      'team.member-add',
+      'team.member-remove',
+      'permission.set-admin-roles',
+      'command.set-enabled',
+      'confrontation.create',
+      'confrontation.result',
+      'confrontation.close',
     ];
     const handleResourceEvent = () => {
       setState({ status: 'connected', lastEventAt: new Date() });

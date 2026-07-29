@@ -7,9 +7,11 @@ import type {
   Health,
   Overview,
   Pool,
+  PoolDetail,
   RankingEntry,
   Session,
   Team,
+  ManagementData,
 } from '../types/api';
 
 const now = Date.now();
@@ -184,4 +186,40 @@ export const mockOverview: Overview = {
   },
   confrontations: activeConfrontations,
   pools: mockPools,
+};
+
+const poolMaps = [
+  ["Azarov's Resting Place", 'Shelter Woods', 'Ormond Lake Mine'],
+  ['Wretched Shop', 'Midwich Elementary School', 'Suffocation Pit', 'Ironworks of Misery', "Thompson's House"],
+  ['Dead Dawg Saloon', 'Coal Tower', 'Treatment Theater', 'Blood Lodge', 'Toba Landing'],
+];
+
+export const mockPoolDetails: PoolDetail[] = mockPools.map((pool, poolIndex) => ({
+  id: pool.id,
+  guildId: mockGuilds[0]!.id,
+  nome: pool.nome,
+  formato: pool.formato as 'MD3' | 'MD5',
+  ativa: pool.ativa,
+  mapas: (poolMaps[poolIndex] ?? ['Mapa 1', 'Mapa 2', 'Mapa 3']).map((nome, index) => ({
+    id: pool.id * 100 + index,
+    poolId: pool.id,
+    nome,
+    ordem: index + 1,
+  })),
+  killers: Array.from({ length: pool.killers }, (_, index) => ({
+    id: pool.id * 1000 + index,
+    poolId: pool.id,
+    nome: `Killer ${index + 1}`,
+    ordem: index + 1,
+  })),
+}));
+
+export const mockManagement: ManagementData = {
+  adminRoleIds: [mockTeams[0]!.id],
+  roles: mockTeams.map(team => ({ ...team, editable: true })),
+  channels: [
+    { id: '1352013816543100938', name: 'confronto-01' },
+    { id: '1352013816543100939', name: 'confronto-02' },
+  ],
+  activeConfrontations,
 };
