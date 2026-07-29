@@ -4,6 +4,7 @@ const {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -15,6 +16,7 @@ const { execFileSync } = require('node:child_process');
 
 const STAGING_MARKER = '.dta-discloud-staging';
 const STAGING_MARKER_CONTENT = 'DTA Discloud staging directory\n';
+const APPROVED_CUSTOM_DOMAINS = new Set(['admin-dta-bot.com']);
 
 const REQUIRED_ENVIRONMENT_VARIABLES = [
   'DISCORD_TOKEN',
@@ -35,6 +37,9 @@ const PRIVATE_RUNTIME_IGNORE_RULES = new Set([
   '*.db-journal',
   '*.db-wal',
   '*.db-shm',
+  'build/',
+  'dist/',
+  'panel/dist/',
 ]);
 
 function parseKeyValueFile(contents) {
@@ -54,13 +59,13 @@ function isInside(parent, candidate) {
 
 function assertOutsideRepository(projectRoot, outputDirectory) {
   if (existsSync(outputDirectory)) throw new Error('Staging output already exists.');
-  const physicalProjectRoot = realpathSync(projectRoot);
-  const physicalParent = realpathSync(path.dirname(outputDirectory));
+  const physicalProjectRoot = realpathSync.native(projectRoot);
+  const physicalParent = realpathSync.native(path.dirname(outputDirectory));
   const physicalOutput = path.join(physicalParent, path.basename(outputDirectory));
   if (isInside(physicalProjectRoot, physicalOutput)) {
     throw new Error('Staging output must be outside the repository.');
   }
-  if (!isInside(realpathSync(tmpdir()), physicalOutput)) {
+  if (!isInside(realpathSync.native(tmpdir()), physicalOutput)) {
     throw new Error('Staging output must be inside the operating system temporary directory.');
   }
 }
@@ -105,12 +110,24 @@ function readDeploymentEnvironment(envPath, subdomain) {
   if (decodedKey.length !== 32 || decodedKey.toString('base64') !== encryptionKey) {
     throw new Error('PANEL_ENCRYPTION_KEY must be canonical base64 for exactly 32 bytes.');
   }
-  const redirect = new URL(environment.get('DISCORD_REDIRECT_URI'));
+  let redirect;
+  try {
+    redirect = new URL(environment.get('DISCORD_REDIRECT_URI'));
+  } catch {
+    throw new Error('DISCORD_REDIRECT_URI must be a valid HTTPS callback URL.');
+  }
   const expectedHost = `${subdomain}.discloud.app`;
+  const isApprovedHost = redirect.hostname === expectedHost
+    || APPROVED_CUSTOM_DOMAINS.has(redirect.hostname);
   if (redirect.protocol !== 'https:'
-    || redirect.hostname !== expectedHost
-    || redirect.pathname !== '/api/auth/callback') {
-    throw new Error(`DISCORD_REDIRECT_URI must be https://${expectedHost}/api/auth/callback.`);
+    || !isApprovedHost
+    || redirect.port
+    || redirect.username
+    || redirect.password
+    || redirect.pathname !== '/api/auth/callback'
+    || redirect.search
+    || redirect.hash) {
+    throw new Error(`DISCORD_REDIRECT_URI must be https://${expectedHost}/api/auth/callback or the same path on a verified custom domain.`);
   }
 }
 
@@ -123,8 +140,8 @@ function safeTrackedPath(projectRoot, relativePath) {
   }
   const sourceStats = lstatSync(source);
   if (sourceStats.isSymbolicLink()) throw new Error(`Tracked path cannot be a symbolic link: ${relativePath}`);
-  const physicalSource = realpathSync(source);
-  if (!isInside(realpathSync(projectRoot), physicalSource)) {
+  const physicalSource = realpathSync.native(source);
+  if (!isInside(realpathSync.native(projectRoot), physicalSource)) {
     throw new Error(`Tracked path escapes repository: ${relativePath}`);
   }
   if (!statSync(physicalSource).isFile()) throw new Error(`Tracked path is not a file: ${relativePath}`);
@@ -133,19 +150,54 @@ function safeTrackedPath(projectRoot, relativePath) {
 
 function assertPrivateRuntimeFile(projectRoot, filePath, label) {
   if (lstatSync(filePath).isSymbolicLink()) throw new Error(`${label} cannot be a symbolic link.`);
-  const physicalPath = realpathSync(filePath);
-  if (!isInside(realpathSync(projectRoot), physicalPath) || !statSync(physicalPath).isFile()) {
+  const physicalPath = realpathSync.native(filePath);
+  if (!isInside(realpathSync.native(projectRoot), physicalPath) || !statSync(physicalPath).isFile()) {
     throw new Error(`${label} must be a file inside the repository.`);
   }
   return physicalPath;
 }
 
 function createStagingIgnore(projectRoot, outputDirectory) {
-  const source = readFileSync(path.join(projectRoot, '.discloudignore'), 'utf8');
+  const ignorePath = assertPrivateRuntimeFile(
+    projectRoot,
+    path.join(projectRoot, '.discloudignore'),
+    '.discloudignore',
+  );
+  const source = readFileSync(ignorePath, 'utf8');
   const rules = source.split(/\r?\n/)
     .filter(line => !PRIVATE_RUNTIME_IGNORE_RULES.has(line.trim()));
   const stagingRules = [...rules, STAGING_MARKER];
   writeFileSync(path.join(outputDirectory, '.discloudignore'), `${stagingRules.join('\n').trimEnd()}\n`);
+}
+
+function copyArtifactDirectory(projectRoot, relativeDirectory, outputDirectory) {
+  const physicalProjectRoot = realpathSync.native(projectRoot);
+  const sourceRoot = path.join(projectRoot, relativeDirectory);
+
+  function copyEntry(source, destination) {
+    const entryStats = lstatSync(source);
+    if (entryStats.isSymbolicLink()) {
+      throw new Error(`Build artifact cannot be a symbolic link: ${path.relative(projectRoot, source)}`);
+    }
+    const physicalSource = realpathSync.native(source);
+    if (!isInside(physicalProjectRoot, physicalSource)) {
+      throw new Error(`Build artifact escapes repository: ${path.relative(projectRoot, source)}`);
+    }
+    if (entryStats.isDirectory()) {
+      mkdirSync(destination, { recursive: true });
+      for (const entry of readdirSync(source)) {
+        copyEntry(path.join(source, entry), path.join(destination, entry));
+      }
+      return;
+    }
+    if (!entryStats.isFile()) {
+      throw new Error(`Unsupported build artifact: ${path.relative(projectRoot, source)}`);
+    }
+    mkdirSync(path.dirname(destination), { recursive: true });
+    copyFileSync(physicalSource, destination);
+  }
+
+  copyEntry(sourceRoot, path.join(outputDirectory, relativeDirectory));
 }
 
 function readCleanTrackedFiles(projectRoot) {
@@ -161,13 +213,13 @@ function readCleanTrackedFiles(projectRoot) {
 }
 
 function cleanupStaging(options) {
-  const projectRoot = realpathSync(path.resolve(options.projectRoot));
+  const projectRoot = realpathSync.native(path.resolve(options.projectRoot));
   const outputDirectory = path.resolve(options.outputDirectory);
   if (!existsSync(outputDirectory) || lstatSync(outputDirectory).isSymbolicLink()) {
     throw new Error('Path is not a DTA staging directory.');
   }
-  const physicalOutput = realpathSync(outputDirectory);
-  if (isInside(projectRoot, physicalOutput) || !isInside(realpathSync(tmpdir()), physicalOutput)) {
+  const physicalOutput = realpathSync.native(outputDirectory);
+  if (isInside(projectRoot, physicalOutput) || !isInside(realpathSync.native(tmpdir()), physicalOutput)) {
     throw new Error('Refusing to clean a staging directory outside the safe temporary boundary.');
   }
   const markerPath = path.join(physicalOutput, STAGING_MARKER);
@@ -203,6 +255,8 @@ function prepareStaging(options) {
       mkdirSync(path.dirname(destination), { recursive: true });
       copyFileSync(file.source, destination);
     }
+    copyArtifactDirectory(projectRoot, 'build', outputDirectory);
+    copyArtifactDirectory(projectRoot, path.join('panel', 'dist'), outputDirectory);
     createStagingIgnore(projectRoot, outputDirectory);
     copyFileSync(safeEnvPath, path.join(outputDirectory, '.env'));
     const databaseDestination = path.join(outputDirectory, 'prisma', 'prisma', 'darkbot.db');
@@ -221,6 +275,15 @@ function readArgument(name) {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
+function buildProject(projectRoot) {
+  const npmCliPath = process.env.npm_execpath;
+  if (!npmCliPath) throw new Error('Run staging through npm run deploy:stage so the project can be built.');
+  execFileSync(process.execPath, [npmCliPath, 'run', 'build'], {
+    cwd: projectRoot,
+    stdio: 'inherit',
+  });
+}
+
 function runCli() {
   const projectRoot = path.resolve(__dirname, '..');
   const cleanupDirectory = readArgument('--cleanup');
@@ -233,11 +296,18 @@ function runCli() {
   if (!outputDirectory) {
     throw new Error('Usage: node scripts/prepare-discloud-staging.js --output <path> | --cleanup <path>');
   }
+  const trackedFiles = readCleanTrackedFiles(projectRoot);
+  buildProject(projectRoot);
+  const verifiedTrackedFiles = readCleanTrackedFiles(projectRoot);
+  if (trackedFiles.join('\0') !== verifiedTrackedFiles.join('\0')) {
+    throw new Error('Tracked file set changed while building the deployment package.');
+  }
   const result = prepareStaging({
     projectRoot,
     outputDirectory,
     envPath: readArgument('--env') ?? path.join(projectRoot, '.env'),
     databasePath: readArgument('--database') ?? path.join(projectRoot, 'prisma', 'prisma', 'darkbot.db'),
+    trackedFiles,
   });
   process.stdout.write(`Staging ready: ${result.outputDirectory}\n`);
   process.stdout.write(`Tracked files copied: ${result.trackedFileCount}\n`);

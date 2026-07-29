@@ -10,13 +10,17 @@ const {
   readCleanTrackedFiles,
 } = require('./prepare-discloud-staging');
 
-function createFixture() {
-  const root = mkdtempSync(path.join(tmpdir(), 'dta-stage-test-'));
+function createFixture(baseDirectory = tmpdir()) {
+  const root = mkdtempSync(path.join(baseDirectory, 'dta-stage-test-'));
   const project = path.join(root, 'project');
   const output = path.join(root, 'output');
   mkdirSync(path.join(project, 'src'), { recursive: true });
+  mkdirSync(path.join(project, 'build'), { recursive: true });
+  mkdirSync(path.join(project, 'panel', 'dist'), { recursive: true });
   mkdirSync(path.join(project, 'prisma', 'prisma'), { recursive: true });
   writeFileSync(path.join(project, 'src', 'index.ts'), 'export {};');
+  writeFileSync(path.join(project, 'build', 'index.js'), '"use strict";');
+  writeFileSync(path.join(project, 'panel', 'dist', 'index.html'), '<main>DTA</main>');
   writeFileSync(path.join(project, '.discloudignore'), '.env\n*.db\n');
   writeFileSync(path.join(project, 'discloud.config'), [
     'NAME=Dark Bot',
@@ -42,6 +46,28 @@ function createFixture() {
   return { root, project, output };
 }
 
+test('accepts the long Windows form of the system temporary directory', t => {
+  if (process.platform !== 'win32' || !process.env.LOCALAPPDATA) {
+    t.skip('Windows long temporary path is unavailable');
+    return;
+  }
+  const fixture = createFixture(path.join(process.env.LOCALAPPDATA, 'Temp'));
+  try {
+    const result = prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath: path.join(fixture.project, '.env'),
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    });
+
+    assert.equal(result.outputDirectory, fixture.output);
+    cleanupStaging({ projectRoot: fixture.project, outputDirectory: fixture.output });
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('creates a staging directory with private runtime files and a safe ignore file', () => {
   const fixture = createFixture();
   try {
@@ -55,11 +81,14 @@ test('creates a staging directory with private runtime files and a safe ignore f
 
     assert.equal(result.trackedFileCount, 2);
     assert.equal(readFileSync(path.join(fixture.output, 'src', 'index.ts'), 'utf8'), 'export {};');
+    assert.equal(readFileSync(path.join(fixture.output, 'build', 'index.js'), 'utf8'), '"use strict";');
+    assert.equal(readFileSync(path.join(fixture.output, 'panel', 'dist', 'index.html'), 'utf8'), '<main>DTA</main>');
     assert.equal(readFileSync(path.join(fixture.output, '.env'), 'utf8').includes('s'.repeat(32)), true);
     assert.equal(readFileSync(path.join(fixture.output, 'prisma', 'prisma', 'darkbot.db'), 'utf8'), 'database');
     const stagingIgnore = readFileSync(path.join(fixture.output, '.discloudignore'), 'utf8');
     assert.doesNotMatch(stagingIgnore, /^\.env$/m);
     assert.doesNotMatch(stagingIgnore, /^\*\.db$/m);
+    assert.match(stagingIgnore, /^\.dta-discloud-staging$/m);
     cleanupStaging({ projectRoot: fixture.project, outputDirectory: fixture.output });
     assert.equal(existsSync(fixture.output), false);
   } finally {
@@ -84,6 +113,28 @@ test('refuses an output path physically redirected into the repository', t => {
       databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
       trackedFiles: ['src/index.ts', 'discloud.config'],
     }), /outside the repository/i);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('refuses a junction inside generated build artifacts', t => {
+  const fixture = createFixture();
+  try {
+    const junction = path.join(fixture.project, 'build', 'linked');
+    try {
+      symlinkSync(path.join(fixture.project, 'src'), junction, 'junction');
+    } catch {
+      t.skip('junction creation is unavailable');
+      return;
+    }
+    assert.throws(() => prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath: path.join(fixture.project, '.env'),
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    }), /build artifact cannot be a symbolic link/i);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -117,6 +168,29 @@ test('requires a clean Git working tree before collecting deploy files', () => {
     assert.throws(() => readCleanTrackedFiles(root), /working tree must be clean/i);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rejects a tracked symbolic link even when its target is a regular file', t => {
+  const fixture = createFixture();
+  try {
+    const linkPath = path.join(fixture.project, 'src', 'linked.ts');
+    try {
+      symlinkSync(path.join(fixture.project, 'src', 'index.ts'), linkPath, 'file');
+    } catch {
+      t.skip('symbolic link creation is unavailable');
+      return;
+    }
+
+    assert.throws(() => prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath: path.join(fixture.project, '.env'),
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/linked.ts', 'discloud.config'],
+    }), /symbolic link/i);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
   }
 });
 
@@ -177,5 +251,62 @@ test('rejects placeholder Discord credentials', () => {
     }), /DISCORD_TOKEN/i);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('accepts an HTTPS OAuth callback on a verified custom domain', () => {
+  const fixture = createFixture();
+  try {
+    const envPath = path.join(fixture.project, '.env');
+    const environment = readFileSync(envPath, 'utf8').replace(
+      'https://dta-admin.discloud.app/api/auth/callback',
+      'https://admin-dta-bot.com/api/auth/callback',
+    );
+    writeFileSync(envPath, environment);
+
+    prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath,
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    });
+    cleanupStaging({ projectRoot: fixture.project, outputDirectory: fixture.output });
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('rejects unsafe OAuth callback URL variants', () => {
+  const unsafeCallbacks = [
+    'http://admin-dta-bot.com/api/auth/callback',
+    'https://admin-dta-bot.com:8443/api/auth/callback',
+    'https://user:pass@admin-dta-bot.com/api/auth/callback',
+    'https://admin-dta-bot.com/api/auth/callback?next=evil',
+    'https://admin-dta-bot.com/api/auth/callback#fragment',
+    'https://admin-dta-bot.com/api/auth/other',
+    'https://unapproved.example/api/auth/callback',
+  ];
+
+  for (const callback of unsafeCallbacks) {
+    const fixture = createFixture();
+    try {
+      const envPath = path.join(fixture.project, '.env');
+      const environment = readFileSync(envPath, 'utf8').replace(
+        'https://dta-admin.discloud.app/api/auth/callback',
+        callback,
+      );
+      writeFileSync(envPath, environment);
+
+      assert.throws(() => prepareStaging({
+        projectRoot: fixture.project,
+        outputDirectory: fixture.output,
+        envPath,
+        databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+        trackedFiles: ['src/index.ts', 'discloud.config'],
+      }), /DISCORD_REDIRECT_URI/i, callback);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
   }
 });
