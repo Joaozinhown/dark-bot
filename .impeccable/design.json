@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-28T00:00:00-03:00",
+  "title": "Design System: DTA Admin Panel",
+  "extensions": {
+    "colorMeta": {
+      "background": { "role": "neutral", "displayName": "Arena Black", "canonical": "#0a0a14", "tonalRamp": ["#050509", "#0a0a14", "#171724", "#29293a", "#46465a", "#707086", "#a9a9b8", "#eeeeF3"] },
+      "surface": { "role": "neutral", "displayName": "Control Surface", "canonical": "#1a1a2e", "tonalRamp": ["#0b0b14", "#1a1a2e", "#292944", "#3b3b59", "#565673", "#777790", "#aaaabb", "#eeeeF4"] },
+      "brand-violet": { "role": "primary", "displayName": "Queens Violet", "canonical": "#8f32d9", "tonalRamp": ["#26053e", "#471070", "#6a1ca3", "#8f32d9", "#aa59e5", "#c683ee", "#deb0f5", "#f4e5fc"] },
+      "veto-red": { "role": "secondary", "displayName": "Veto Crimson", "canonical": "#dc143c", "tonalRamp": ["#3d040f", "#6b091d", "#9c102b", "#dc143c", "#e84a68", "#ef7d92", "#f6b1be", "#fde6eb"] },
+      "winner-gold": { "role": "tertiary", "displayName": "Winner Gold", "canonical": "#c9a227", "tonalRamp": ["#302604", "#5c4808", "#8b6e11", "#c9a227", "#dabd5a", "#e7d48b", "#f1e5ba", "#faf5e3"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Page and compact panel headings." },
+      "body": { "displayName": "Body", "purpose": "Operational content and tables." },
+      "label": { "displayName": "Label", "purpose": "Controls, metadata and status." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 12px 32px rgba(0,0,0,0.36)", "purpose": "Dialogs, menus and drawers only." }
+    ],
+    "motion": [
+      { "name": "state", "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Feedback and state transitions." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "640px" },
+      { "name": "tablet", "value": "960px" }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "Mesa de Operacao Queens Trials",
+    "overview": "Interface escura e densa para staff trabalhando durante partidas ao vivo. Identidade reconhecivel sem atrapalhar trabalho repetitivo.",
+    "keyCharacteristics": ["Sidebar operacional", "Tabelas para comparacao", "Detalhes em drawer", "Movimento comunica estado"],
+    "rules": [
+      { "name": "Restraint", "body": "Cor saturada nunca domina superficies inativas.", "section": "colors" },
+      { "name": "Flat-by-Default", "body": "Secoes de pagina nunca flutuam como cards decorativos.", "section": "elevation" }
+    ],
+    "dos": ["Mostrar operacao ao vivo primeiro.", "Usar controles familiares e estados completos."],
+    "donts": ["Nao usar cards numericos como estrutura principal.", "Nao usar gradientes, neon decorativo ou glassmorphism."]
+  }
+}
