@@ -38,7 +38,7 @@ Feature development keeps `TYPE=bot` and `ADMIN_PANEL_ENABLED=false`. The Disclo
 | Administration P0 | Complete | Pools, teams, members, permissions, command toggles and confrontations. |
 | Live operations | Complete for current scope | SSE, reconnect, heartbeat, stream limits and health. |
 | Custom command templates | Deferred | Would require a new interaction contract or Message Content intent. |
-| Platinum cutover | Pending external configuration | Subdomain and Discord client secret are not configured. |
+| Platinum cutover | Pending Discord OAuth secret | `dta-admin` is reserved; client secret and callback remain. |
 
 ## Authorization model
 

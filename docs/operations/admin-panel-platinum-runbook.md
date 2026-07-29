@@ -10,7 +10,7 @@ Estado verificado em 28 de julho de 2026:
 - 2048 MB disponiveis;
 - app atual `1785101572014` com 512 MB;
 - app atual offline;
-- nenhum subdominio reservado na conta;
+- subdominio `dta-admin` reservado e disponivel para o corte;
 - Discloud CLI `2.11.1` instalada.
 
 ## Condicoes para o corte
@@ -23,12 +23,13 @@ Estado verificado em 28 de julho de 2026:
 - Chaves novas de cookie e criptografia geradas localmente.
 - Somente uma instancia usando `DISCORD_TOKEN` e o arquivo SQLite.
 
-## 1. Reservar o subdominio
+## 1. Confirmar o subdominio
 
 O nome deve ter ate 20 caracteres e aceitar apenas letras, numeros e hifen.
 
+O subdominio `dta-admin` ja foi reservado. Confirme antes do deploy:
+
 ```powershell
-discloud subdomain create --id dta-admin
 discloud subdomain info --id dta-admin
 ```
 
