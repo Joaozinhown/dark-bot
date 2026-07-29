@@ -85,7 +85,22 @@ Get-ChildItem discloud\backups -Recurse -File
 git rev-parse HEAD
 ```
 
-Confirme que o backup tem `prisma/prisma/darkbot.db` e `.env`. Guarde o hash Git e o nome do arquivo de backup no registro do deploy. Mantenha o backup em armazenamento local criptografado, com acesso restrito, e apague quando o periodo de retencao terminar.
+Confirme que o backup tem `prisma/prisma/darkbot.db`. A Discloud pode omitir o `.env` do arquivo baixado. Nesse caso, proteja uma copia local para o usuario atual do Windows com DPAPI:
+
+```powershell
+Add-Type -AssemblyName System.Security
+$source = (Resolve-Path '.env').Path
+$target = Join-Path (Resolve-Path 'discloud\backups').Path 'env-pre-panel.dpapi'
+$bytes = [IO.File]::ReadAllBytes($source)
+$protected = [System.Security.Cryptography.ProtectedData]::Protect(
+  $bytes,
+  $null,
+  [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+)
+[IO.File]::WriteAllBytes($target, $protected)
+```
+
+Guarde o hash Git e o nome do arquivo de backup no registro do deploy. Mantenha os backups com acesso restrito e apague quando o periodo de retencao terminar. O arquivo DPAPI so pode ser aberto pela mesma conta do Windows na mesma instalacao.
 
 `discloud/backups/` deve permanecer ignorado por Git e pelo pacote Discloud. Verifique antes de continuar:
 
@@ -222,6 +237,15 @@ Rollback imediato se o bot nao ficar online, o banco nao abrir, os comandos muda
 ```powershell
 discloud app stop 1785101572014
 $restore = '<caminho-absoluto-do-backup-extraido>'
+Add-Type -AssemblyName System.Security
+$encryptedEnv = Resolve-Path 'discloud\backups\env-pre-panel.dpapi'
+$protected = [IO.File]::ReadAllBytes($encryptedEnv)
+$plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
+  $protected,
+  $null,
+  [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+)
+[IO.File]::WriteAllBytes((Join-Path $restore '.env'), $plain)
 $restoreIgnore = Join-Path $restore '.discloudignore'
 if (Test-Path $restoreIgnore) {
   Move-Item -LiteralPath $restoreIgnore -Destination "$restore.discloudignore.reference"
