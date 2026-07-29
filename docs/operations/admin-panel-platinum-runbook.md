@@ -85,7 +85,13 @@ Get-ChildItem discloud\backups -Recurse -File
 git rev-parse HEAD
 ```
 
-Confirme que o backup tem `prisma/darkbot.db` e `.env`. Guarde o hash Git e o nome do arquivo de backup no registro do deploy.
+Confirme que o backup tem `prisma/prisma/darkbot.db` e `.env`. Guarde o hash Git e o nome do arquivo de backup no registro do deploy.
+
+`discloud/backups/` deve permanecer ignorado por Git e pelo pacote Discloud. Verifique antes de continuar:
+
+```powershell
+git check-ignore -v --no-index discloud/backups/backup.zip
+```
 
 ## 5. Configuracao de hospedagem no corte
 
@@ -123,12 +129,35 @@ O teste de contrato deve listar os 11 comandos aprovados. O diff de `src/command
 
 ## 7. Deploy
 
-O `.discloudignore` normalmente exclui `.env` e bancos. Para um corte com novas variaveis, crie um pacote controlado que inclua o `.env` e a copia validada do banco. Restaure o ignore imediatamente depois do upload.
-
-Para atualizar um app existente por ID:
+O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. Monte um staging fora do repositorio usando somente o commit validado, depois acrescente os dois arquivos privados de forma explicita:
 
 ```powershell
-discloud app commit 1785101572014
+$stage = Join-Path $env:TEMP "dta-admin-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+$archive = "$stage.zip"
+git archive --format=zip HEAD -o $archive
+Expand-Archive -LiteralPath $archive -DestinationPath $stage
+Move-Item -LiteralPath (Join-Path $stage '.discloudignore') -Destination "$stage.discloudignore.reference"
+Copy-Item -LiteralPath .env -Destination (Join-Path $stage '.env')
+New-Item -ItemType Directory -Path (Join-Path $stage 'prisma\prisma') -Force | Out-Null
+Copy-Item -LiteralPath prisma\prisma\darkbot.db -Destination (Join-Path $stage 'prisma\prisma\darkbot.db')
+```
+
+Inspecione o staging sem imprimir o conteudo do `.env`:
+
+```powershell
+Get-ChildItem $stage -Force | Select-Object Name,Length
+Get-Item (Join-Path $stage '.env'),(Join-Path $stage 'prisma\prisma\darkbot.db') | Select-Object FullName,Length
+```
+
+Atualize o app existente por ID a partir do staging:
+
+```powershell
+Push-Location $stage
+try {
+  discloud app commit 1785101572014
+} finally {
+  Pop-Location
+}
 ```
 
 Se a plataforma recusar a conversao de `bot` para `site`, nao apague o app atual. Pare o procedimento e use o fluxo de upload de site somente depois de confirmar que o backup pode ser restaurado no novo app.
@@ -187,18 +216,29 @@ discloud app ram 1785101572014 768
 Rollback imediato se o bot nao ficar online, o banco nao abrir, os comandos mudarem ou o painel expuser acesso indevido.
 
 1. Pare o app defeituoso.
-2. Restaure o pacote do backup anterior.
-3. Restaure `TYPE=bot`, `ID=1785101572014` e as configuracoes anteriores.
-4. Mantenha `ADMIN_PANEL_ENABLED=false`.
-5. Inicie o bot.
-6. Confirme bot online, pools e os 11 comandos.
+2. Extraia o backup em um diretorio temporario fora do repositorio.
+3. Mova o `.discloudignore` extraido para fora do staging para nao filtrar `.env` e SQLite.
+4. Confirme no staging `TYPE=bot`, `ID=1785101572014` e `ADMIN_PANEL_ENABLED=false`.
+5. Faca o commit do staging completo.
+6. Inicie o bot e confirme pools e os 11 comandos.
 
 ```powershell
 discloud app stop 1785101572014
-discloud app commit 1785101572014 <caminho-do-backup-extraido>\**
+$restore = '<caminho-absoluto-do-backup-extraido>'
+$restoreIgnore = Join-Path $restore '.discloudignore'
+if (Test-Path $restoreIgnore) {
+  Move-Item -LiteralPath $restoreIgnore -Destination "$restore.discloudignore.reference"
+}
+Get-Item (Join-Path $restore '.env'),(Join-Path $restore 'prisma\prisma\darkbot.db') | Select-Object FullName,Length
+Push-Location $restore
+try {
+  discloud app commit 1785101572014
+} finally {
+  Pop-Location
+}
 discloud app start 1785101572014
 discloud app status 1785101572014
 discloud app logs 1785101572014
 ```
 
-Nao execute dois processos com o mesmo token durante o rollback.
+Nao execute dois processos com o mesmo token durante o rollback. Nao rode `git add` dentro de staging ou backup.

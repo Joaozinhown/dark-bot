@@ -5,6 +5,7 @@ panel/test-results/
 panel/playwright-report/
 build/
 discloud/logs/
+discloud/backups/
 .env
 *.db
 *.db-journal
