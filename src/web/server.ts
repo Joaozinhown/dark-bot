@@ -16,6 +16,7 @@ import { createOpaqueToken, hashOpaqueToken, verifyOpaqueToken } from './auth/cr
 import { DiscordOAuthError, type DiscordOAuthGuild as OAuthGuild } from './auth/discord-oauth';
 import type { EnabledPanelConfig } from './config';
 import { guildEventBus, type GuildEventBus } from './realtime/event-bus';
+import { createConnectionLimiter } from './realtime/connection-limiter';
 import type { PanelRuntime } from './runtime';
 import { panelActionSchema, PanelActionError } from './panel-actions';
 
@@ -24,6 +25,9 @@ const CSRF_COOKIE = 'dta_csrf';
 const STATE_COOKIE = 'dta_oauth_state';
 const STATE_TTL_SECONDS = 10 * 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+const MAX_SSE_CONNECTIONS_PER_SESSION_GUILD = 3;
+const MAX_SSE_CONNECTIONS_TOTAL = 100;
+const REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
 
 export interface OAuthClientContract {
   getAuthorizationUrl(state: string): string;
@@ -80,6 +84,7 @@ export interface WebAppOptions {
   sessions: SessionServiceContract;
   runtime: PanelRuntime;
   eventBus?: GuildEventBus;
+  panelRoot?: string;
 }
 
 interface AuthenticatedRequest {
@@ -95,8 +100,21 @@ function sendData(reply: FastifyReply, data: unknown) {
   return reply.send({ success: true, data, error: null });
 }
 
+function isSpaNavigation(request: FastifyRequest): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  const pathname = new URL(request.url, 'http://localhost').pathname;
+  const isReserved = pathname === '/api'
+    || pathname.startsWith('/api/')
+    || pathname === '/health'
+    || pathname.startsWith('/health/')
+    || pathname.startsWith('/assets/');
+  if (isReserved || path.extname(pathname)) return false;
+  return request.headers.accept?.split(',').some(value => value.trim().startsWith('text/html')) ?? false;
+}
+
 export async function createWebApp(options: WebAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
+    bodyLimit: REQUEST_BODY_LIMIT_BYTES,
     trustProxy: options.config.isProduction ? 1 : false,
     logController: new LogController({
       disableRequestLogging: () => true,
@@ -108,6 +126,12 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
   });
   const eventBus = options.eventBus ?? guildEventBus;
   const refreshOperations = new Map<string, Promise<OAuthGuild[] | null>>();
+  const streamLimiter = createConnectionLimiter({
+    maxPerKey: MAX_SSE_CONNECTIONS_PER_SESSION_GUILD,
+    maxTotal: MAX_SSE_CONNECTIONS_TOTAL,
+  });
+  const streamsBySession = new Map<string, Set<() => void>>();
+  const streamsByGuild = new Map<string, Set<() => void>>();
   const secureCookies = options.config.isProduction;
   const sessionCookieOptions = {
     path: '/',
@@ -146,6 +170,11 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     }
     if (statusCode === 429) {
       return sendError(reply, 429, 'RATE_LIMITED', 'Muitas requisicoes. Tente novamente.');
+    }
+    if (statusCode >= 400 && statusCode < 500) {
+      const code = statusCode === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST';
+      const message = statusCode === 413 ? 'Requisicao muito grande.' : 'Requisicao invalida.';
+      return sendError(reply, statusCode, code, message);
     }
     app.log.error({ err: error }, 'Web request failed');
     return sendError(reply, 500, 'INTERNAL_ERROR', 'Erro interno.');
@@ -253,6 +282,26 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     return { auth, guild };
   }
 
+  function registerStream(
+    registry: Map<string, Set<() => void>>,
+    key: string,
+    close: () => void,
+  ): () => void {
+    const streams = registry.get(key) ?? new Set<() => void>();
+    streams.add(close);
+    registry.set(key, streams);
+    return () => {
+      const current = registry.get(key);
+      if (!current) return;
+      current.delete(close);
+      if (current.size === 0) registry.delete(key);
+    };
+  }
+
+  function closeRegisteredStreams(registry: Map<string, Set<() => void>>, key: string): void {
+    for (const close of [...(registry.get(key) ?? [])]) close();
+  }
+
   app.get('/health', { config: { rateLimit: false } }, async (_request, reply) => sendData(reply, {
     status: options.runtime.isReady() ? 'ready' : 'starting',
     botReady: options.runtime.isReady(),
@@ -286,6 +335,14 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
 
     const tokens = await options.oauth.exchangeCode(parsed.data.code);
     const user = await options.oauth.getCurrentUser(tokens.accessToken);
+    const oauthGuilds = await options.oauth.getCurrentUserGuilds(tokens.accessToken);
+    const authorizedGuilds = await options.runtime.listAuthorizedGuilds(
+      user.id,
+      oauthGuilds as DiscordOAuthGuild[],
+    );
+    if (authorizedGuilds.length === 0) {
+      return sendError(reply, 403, 'NO_AUTHORIZED_GUILDS', 'Nenhum servidor autorizado encontrado.');
+    }
     const created = await options.sessions.create({
       userId: user.id,
       username: user.username,
@@ -314,6 +371,7 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     const auth = await requireSession(request, reply);
     if (!auth || !(await requireCsrf(request, reply, auth))) return reply;
     await options.sessions.revoke(auth.token);
+    closeRegisteredStreams(streamsBySession, hashOpaqueToken(auth.token));
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     reply.clearCookie(CSRF_COOKIE, { path: '/' });
     return reply.code(204).send();
@@ -356,6 +414,9 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       access.auth.session.userId,
       parsed.data,
     );
+    if (parsed.data.type === 'permission.set-admin-roles') {
+      closeRegisteredStreams(streamsByGuild, access.guild.id);
+    }
     return sendData(reply, result);
   });
 
@@ -364,6 +425,12 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     if (!access) return reply;
     const streamAuth = access.auth;
     const streamGuildId = access.guild.id;
+    const streamSessionId = hashOpaqueToken(streamAuth.token);
+    const acquiredConnection = streamLimiter.acquire(`${streamSessionId}:${streamGuildId}`);
+    if (!acquiredConnection) {
+      return sendError(reply, 429, 'SSE_LIMIT_REACHED', 'Limite de conexoes em tempo real atingido.');
+    }
+    const releaseConnection: () => void = acquiredConnection;
 
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -379,13 +446,19 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       }
     });
     let isClosed = false;
+    let heartbeat: NodeJS.Timeout | undefined;
     let authorizationTimer: NodeJS.Timeout | undefined;
+    let unregisterSession = () => {};
+    let unregisterGuild = () => {};
     function closeStream() {
       if (isClosed) return;
       isClosed = true;
-      clearInterval(heartbeat);
+      if (heartbeat) clearInterval(heartbeat);
       if (authorizationTimer) clearTimeout(authorizationTimer);
       unsubscribe();
+      unregisterSession();
+      unregisterGuild();
+      releaseConnection();
       reply.raw.end();
     }
     async function revalidateAuthorization() {
@@ -399,16 +472,19 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       }
       if (!isClosed) authorizationTimer = setTimeout(revalidateAuthorization, 60_000);
     }
-    const heartbeat = setInterval(() => {
+    heartbeat = setInterval(() => {
       if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n');
     }, 20_000);
+    unregisterSession = registerStream(streamsBySession, streamSessionId, closeStream);
+    unregisterGuild = registerStream(streamsByGuild, streamGuildId, closeStream);
     authorizationTimer = setTimeout(revalidateAuthorization, 60_000);
     request.raw.on('close', closeStream);
     return reply;
   });
 
-  const panelRoot = path.resolve(process.cwd(), 'panel', 'dist');
-  if (existsSync(path.join(panelRoot, 'index.html'))) {
+  const panelRoot = options.panelRoot ?? path.resolve(process.cwd(), 'panel', 'dist');
+  const hasFrontendBuild = existsSync(path.join(panelRoot, 'index.html'));
+  if (hasFrontendBuild) {
     await app.register(fastifyStatic, {
       root: panelRoot,
       wildcard: false,
@@ -420,13 +496,14 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
         }
       },
     });
-    app.setNotFoundHandler((request, reply) => {
-      if (request.url.startsWith('/api/') || request.url === '/health') {
-        return sendError(reply, 404, 'NOT_FOUND', 'Recurso nao encontrado.');
-      }
-      return reply.sendFile('index.html', { maxAge: 0, immutable: false });
-    });
   }
+
+  app.setNotFoundHandler((request, reply) => {
+    if (hasFrontendBuild && isSpaNavigation(request)) {
+      return reply.sendFile('index.html', { maxAge: 0, immutable: false });
+    }
+    return sendError(reply, 404, 'NOT_FOUND', 'Recurso nao encontrado.');
+  });
 
   return app;
 }
