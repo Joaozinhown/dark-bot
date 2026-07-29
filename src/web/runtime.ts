@@ -58,6 +58,7 @@ export interface PanelRuntime {
   getGuildCount(): number;
   getCommandCount?(): number;
   listAuthorizedGuilds(userId: string, oauthGuilds: readonly DiscordOAuthGuild[]): Promise<AuthorizedGuild[]>;
+  hasGuildAccess(userId: string, guildId: string): Promise<boolean>;
   getOverview(guildId: string): Promise<unknown>;
   getRecentConfrontations(guildId: string): Promise<unknown[]>;
   getPools(guildId: string): Promise<unknown[]>;
@@ -108,6 +109,24 @@ function actionEntityId(action: PanelAction): string | null {
   return null;
 }
 
+async function fetchLiveGuildMember(guild: Guild, userId: string): Promise<GuildMember> {
+  return guild.members.fetch({ user: userId, force: true });
+}
+
+export async function hasLiveGuildAccess(guild: Guild, userId: string): Promise<boolean> {
+  try {
+    const member = await fetchLiveGuildMember(guild, userId);
+    return guildPermissionService.hasBotAdminPermission({
+      guildId: guild.id,
+      hasManageGuild: guild.ownerId === userId
+        || member.permissions.has(PermissionFlagsBits.ManageGuild),
+      roleIds: [...member.roles.cache.keys()],
+    });
+  } catch {
+    return false;
+  }
+}
+
 export function createPanelRuntime(client: PanelClient): PanelRuntime {
   function requireGuild(guildId: string) {
     const guild = client.guilds.cache.get(guildId);
@@ -129,13 +148,19 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
           async resolveRoleIds(guildId) {
             const guild = client.guilds.cache.get(guildId);
             if (!guild) return null;
-            const member: GuildMember = await guild.members.fetch(userId);
+            const member = await fetchLiveGuildMember(guild, userId);
             return [...member.roles.cache.keys()];
           },
         },
         guildPermissionService,
       });
       return accessService.listAuthorizedGuilds(oauthGuilds);
+    },
+
+    async hasGuildAccess(userId, guildId) {
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) return false;
+      return hasLiveGuildAccess(guild, userId);
     },
 
     async getOverview(guildId) {

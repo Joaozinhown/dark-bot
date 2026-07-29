@@ -28,6 +28,7 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_SSE_CONNECTIONS_PER_SESSION_GUILD = 3;
 const MAX_SSE_CONNECTIONS_TOTAL = 100;
 const REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
+const OAUTH_GUILD_CACHE_TTL_MS = 30_000;
 
 export interface OAuthClientContract {
   getAuthorizationUrl(state: string): string;
@@ -92,6 +93,11 @@ interface AuthenticatedRequest {
   session: PublicSession;
 }
 
+interface OAuthGuildCacheEntry {
+  readonly guilds: OAuthGuild[];
+  readonly expiresAt: number;
+}
+
 function sendError(reply: FastifyReply, statusCode: number, code: string, message: string) {
   return reply.code(statusCode).send({ success: false, data: null, error: { code, message } });
 }
@@ -125,7 +131,8 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     },
   });
   const eventBus = options.eventBus ?? guildEventBus;
-  const refreshOperations = new Map<string, Promise<OAuthGuild[] | null>>();
+  const oauthGuildCache = new Map<string, OAuthGuildCacheEntry>();
+  const oauthGuildLoads = new Map<string, Promise<OAuthGuild[] | null>>();
   const streamLimiter = createConnectionLimiter({
     maxPerKey: MAX_SSE_CONNECTIONS_PER_SESSION_GUILD,
     maxTotal: MAX_SSE_CONNECTIONS_TOTAL,
@@ -224,38 +231,57 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     return true;
   }
 
-  async function loadOAuthGuilds(auth: AuthenticatedRequest): Promise<OAuthGuild[] | null> {
+  async function fetchOAuthGuilds(auth: AuthenticatedRequest): Promise<OAuthGuild[] | null> {
     const tokens = await options.sessions.readOAuthTokens(auth.token);
     if (!tokens) return null;
     try {
       return await options.oauth.getCurrentUserGuilds(tokens.accessToken);
     } catch (error: unknown) {
       if (!(error instanceof DiscordOAuthError) || error.status !== 401 || !tokens.refreshToken) throw error;
-      const pending = refreshOperations.get(auth.token);
-      if (pending) return pending;
-
-      const operation = (async () => {
-        const latestTokens = await options.sessions.readOAuthTokens(auth.token);
-        if (!latestTokens) return null;
-        if (latestTokens.accessToken !== tokens.accessToken) {
-          return options.oauth.getCurrentUserGuilds(latestTokens.accessToken);
-        }
-        if (!latestTokens.refreshToken) return null;
-
-        const refreshed = await options.oauth.refresh(latestTokens.refreshToken);
-        const replaced = await options.sessions.replaceOAuthTokens(auth.token, {
-          accessToken: refreshed.accessToken,
-          refreshToken: refreshed.refreshToken,
-        });
-        if (!replaced) return null;
-        return options.oauth.getCurrentUserGuilds(refreshed.accessToken);
-      })();
-      refreshOperations.set(auth.token, operation);
-      try {
-        return await operation;
-      } finally {
-        refreshOperations.delete(auth.token);
+      const latestTokens = await options.sessions.readOAuthTokens(auth.token);
+      if (!latestTokens) return null;
+      if (latestTokens.accessToken !== tokens.accessToken) {
+        return options.oauth.getCurrentUserGuilds(latestTokens.accessToken);
       }
+      if (!latestTokens.refreshToken) return null;
+
+      const refreshed = await options.oauth.refresh(latestTokens.refreshToken);
+      const replaced = await options.sessions.replaceOAuthTokens(auth.token, {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+      });
+      if (!replaced) return null;
+      return options.oauth.getCurrentUserGuilds(refreshed.accessToken);
+    }
+  }
+
+  async function loadOAuthGuilds(auth: AuthenticatedRequest): Promise<OAuthGuild[] | null> {
+    const cacheKey = hashOpaqueToken(auth.token);
+    const now = Date.now();
+    for (const [key, entry] of oauthGuildCache) {
+      if (entry.expiresAt <= now) oauthGuildCache.delete(key);
+    }
+    const cached = oauthGuildCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.guilds;
+
+    const pending = oauthGuildLoads.get(cacheKey);
+    if (pending) return pending;
+
+    const operation = fetchOAuthGuilds(auth).then(async guilds => {
+      const isSessionActive = Boolean(await options.sessions.readOAuthTokens(auth.token));
+      if (guilds && isSessionActive) {
+        oauthGuildCache.set(cacheKey, {
+          guilds,
+          expiresAt: Date.now() + OAUTH_GUILD_CACHE_TTL_MS,
+        });
+      }
+      return guilds;
+    });
+    oauthGuildLoads.set(cacheKey, operation);
+    try {
+      return await operation;
+    } finally {
+      oauthGuildLoads.delete(cacheKey);
     }
   }
 
@@ -271,15 +297,15 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
   async function requireGuild(
     request: FastifyRequest<{ Params: { guildId: string } }>,
     reply: FastifyReply,
-  ): Promise<{ auth: AuthenticatedRequest; guild: AuthorizedGuild } | null> {
+  ): Promise<{ auth: AuthenticatedRequest; guildId: string } | null> {
     const auth = await requireSession(request, reply);
     if (!auth) return null;
-    const guild = (await listAuthorizedGuilds(auth)).find(item => item.id === request.params.guildId);
-    if (!guild) {
+    const guildId = request.params.guildId;
+    if (!(await options.runtime.hasGuildAccess(auth.session.userId, guildId))) {
       sendError(reply, 403, 'GUILD_FORBIDDEN', 'Acesso ao servidor negado.');
       return null;
     }
-    return { auth, guild };
+    return { auth, guildId };
   }
 
   function registerStream(
@@ -372,7 +398,9 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     const auth = await requireSession(request, reply);
     if (!auth || !(await requireCsrf(request, reply, auth))) return reply;
     await options.sessions.revoke(auth.token);
-    closeRegisteredStreams(streamsBySession, hashOpaqueToken(auth.token));
+    const sessionKey = hashOpaqueToken(auth.token);
+    oauthGuildCache.delete(sessionKey);
+    closeRegisteredStreams(streamsBySession, sessionKey);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     reply.clearCookie(CSRF_COOKIE, { path: '/' });
     return reply.code(204).send();
@@ -397,7 +425,7 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
   for (const [resource, load] of guildReads) {
     app.get<{ Params: { guildId: string } }>(`/api/guilds/:guildId/${resource}`, async (request, reply) => {
       const access = await requireGuild(request, reply);
-      return access ? sendData(reply, await load(access.guild.id)) : reply;
+      return access ? sendData(reply, await load(access.guildId)) : reply;
     });
   }
 
@@ -411,12 +439,12 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       return sendError(reply, 400, 'VALIDATION_ERROR', 'Dados da acao invalidos.');
     }
     const result = await options.runtime.executeAction(
-      access.guild.id,
+      access.guildId,
       access.auth.session.userId,
       parsed.data,
     );
     if (parsed.data.type === 'permission.set-admin-roles') {
-      closeRegisteredStreams(streamsByGuild, access.guild.id);
+      closeRegisteredStreams(streamsByGuild, access.guildId);
     }
     return sendData(reply, result);
   });
@@ -425,7 +453,7 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     const access = await requireGuild(request, reply);
     if (!access) return reply;
     const streamAuth = access.auth;
-    const streamGuildId = access.guild.id;
+    const streamGuildId = access.guildId;
     const streamSessionId = hashOpaqueToken(streamAuth.token);
     const acquiredConnection = streamLimiter.acquire(`${streamSessionId}:${streamGuildId}`);
     if (!acquiredConnection) {
@@ -466,8 +494,11 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       try {
         const currentSession = await options.sessions.resolve(streamAuth.token);
         if (!currentSession) return closeStream();
-        const guilds = await listAuthorizedGuilds({ token: streamAuth.token, session: currentSession });
-        if (!guilds.some(guild => guild.id === streamGuildId)) return closeStream();
+        const hasAccess = await options.runtime.hasGuildAccess(
+          currentSession.userId,
+          streamGuildId,
+        );
+        if (!hasAccess) return closeStream();
       } catch {
         return closeStream();
       }

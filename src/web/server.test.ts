@@ -94,6 +94,9 @@ function createDependencies() {
         capabilities: ['manage_bot'] as const,
       }));
     },
+    async hasGuildAccess(_userId, guildId) {
+      return guildId === 'guild-a';
+    },
     async getOverview(guildId) { return { guildId }; },
     async getRecentConfrontations() { return []; },
     async getPools() { return []; },
@@ -513,6 +516,113 @@ test('serializes concurrent OAuth refreshes for one session', async () => {
     assert.equal(first.statusCode, 200);
     assert.equal(second.statusCode, 200);
     assert.equal(refreshCalls, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+test('persists admin roles without another OAuth guild request after panel load', async () => {
+  const dependencies = createDependencies();
+  let guildCalls = 0;
+  let executedAction: unknown = null;
+  let persistedRoleIds: string[] = [];
+  dependencies.oauth.getCurrentUserGuilds = async () => {
+    guildCalls += 1;
+    if (guildCalls > 2) throw new DiscordOAuthError('rate limited', 429);
+    return [{ id: 'guild-a', name: 'Guild A', icon: null, owner: true, permissions: '0' }];
+  };
+  dependencies.runtime.executeAction = async (_guildId, _actorUserId, action) => {
+    executedAction = action;
+    if (action.type === 'permission.set-admin-roles') persistedRoleIds = [...action.roleIds];
+    return { roleIds: persistedRoleIds };
+  };
+  dependencies.runtime.getManagement = async () => ({
+    roles: [],
+    channels: [],
+    adminRoleIds: persistedRoleIds,
+  });
+  const app = await createWebApp({ config, ...dependencies });
+
+  try {
+    const login = await app.inject({ method: 'GET', url: '/api/auth/login' });
+    const state = new URL(login.headers.location!).searchParams.get('state')!;
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/api/auth/callback?code=code&state=${encodeURIComponent(state)}`,
+      headers: { cookie: cookiePair(login.headers['set-cookie'], 'dta_oauth_state') },
+    });
+    const cookies = [
+      cookiePair(callback.headers['set-cookie'], 'dta_session'),
+      cookiePair(callback.headers['set-cookie'], 'dta_csrf'),
+    ].join('; ');
+    const action = { type: 'permission.set-admin-roles', roleIds: ['123456789012345678'] };
+    const initialGuilds = await app.inject({
+      method: 'GET',
+      url: '/api/guilds',
+      headers: { cookie: cookies },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/guilds/guild-a/actions',
+      headers: { cookie: cookies, 'x-csrf-token': 'csrf-token' },
+      payload: action,
+    });
+    const management = await app.inject({
+      method: 'GET',
+      url: '/api/guilds/guild-a/management',
+      headers: { cookie: cookies },
+    });
+
+    assert.equal(initialGuilds.statusCode, 200);
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(management.json().data.adminRoleIds, ['123456789012345678']);
+    assert.deepEqual(executedAction, action);
+    assert.equal(guildCalls, 2);
+  } finally {
+    await app.close();
+  }
+});
+
+test('denies an action when live guild access was revoked after OAuth listing', async () => {
+  const dependencies = createDependencies();
+  let executed = false;
+  dependencies.runtime.hasGuildAccess = async () => false;
+  dependencies.runtime.executeAction = async () => {
+    executed = true;
+    return null;
+  };
+  const app = await createWebApp({ config, ...dependencies });
+
+  try {
+    const login = await app.inject({ method: 'GET', url: '/api/auth/login' });
+    const state = new URL(login.headers.location!).searchParams.get('state')!;
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/api/auth/callback?code=code&state=${encodeURIComponent(state)}`,
+      headers: { cookie: cookiePair(login.headers['set-cookie'], 'dta_oauth_state') },
+    });
+    const cookies = [
+      cookiePair(callback.headers['set-cookie'], 'dta_session'),
+      cookiePair(callback.headers['set-cookie'], 'dta_csrf'),
+    ].join('; ');
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/guilds',
+      headers: { cookie: cookies },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/guilds/guild-a/actions',
+      headers: { cookie: cookies, 'x-csrf-token': 'csrf-token' },
+      payload: { type: 'permission.set-admin-roles', roleIds: ['123456789012345678'] },
+    });
+
+    assert.equal(listed.statusCode, 200);
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().error.code, 'GUILD_FORBIDDEN');
+    assert.equal(executed, false);
   } finally {
     await app.close();
   }
