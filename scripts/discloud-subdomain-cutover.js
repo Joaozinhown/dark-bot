@@ -61,12 +61,43 @@ async function runCutover(dependencies) {
   }
 }
 
-function executable(name) {
-  return process.platform === 'win32' && ['discloud', 'npm'].includes(name) ? `${name}.cmd` : name;
+function findWindowsDiscloudEntrypoint() {
+  const result = spawnSync('where.exe', ['discloud.cmd'], {
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  if (result.error) throw result.error;
+  const shimPath = result.stdout?.split(/\r?\n/).find(Boolean);
+  if (result.status !== 0 || !shimPath) throw new Error('discloud.cmd was not found in PATH.');
+  const cliPath = path.win32.join(
+    path.win32.dirname(shimPath.trim()),
+    'node_modules',
+    'discloud-cli',
+    'bin',
+    'discloud',
+  );
+  if (!existsSync(cliPath)) throw new Error(`Discloud CLI entrypoint was not found: ${cliPath}`);
+  return cliPath;
+}
+
+function buildSpawnInvocation(
+  command,
+  args,
+  platform = process.platform,
+  resolveDiscloudEntrypoint = findWindowsDiscloudEntrypoint,
+) {
+  if (platform === 'win32' && command === 'discloud') {
+    return {
+      command: process.execPath,
+      args: [resolveDiscloudEntrypoint(), ...args],
+    };
+  }
+  return { command, args };
 }
 
 function runCommand(command, args, options = {}) {
-  const result = spawnSync(executable(command), args, {
+  const invocation = buildSpawnInvocation(command, args);
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: options.cwd ?? PROJECT_ROOT,
     encoding: 'utf8',
     stdio: options.inherit ? 'inherit' : 'pipe',
@@ -215,7 +246,13 @@ function createProductionDependencies() {
     prepareStaging: async databasePath => {
       const stagingDirectory = path.join(tmpdir(), `${TARGET_APP}-deploy-${Math.floor(Date.now() / 1000)}`);
       try {
-        runCommand('npm', ['run', 'deploy:stage', '--', '--output', stagingDirectory, '--database', databasePath], { inherit: true });
+        runCommand('node', [
+          path.join('scripts', 'prepare-discloud-staging.js'),
+          '--output',
+          stagingDirectory,
+          '--database',
+          databasePath,
+        ], { inherit: true });
         const stagedDatabase = path.join(stagingDirectory, 'prisma', 'prisma', 'darkbot.db');
         if (!existsSync(stagedDatabase) || !statSync(stagedDatabase).isFile()) {
           throw new Error('Staging SQLite database is missing.');
@@ -309,6 +346,7 @@ module.exports = {
   LEGACY_APP,
   SOURCE_APP,
   TARGET_APP,
+  buildSpawnInvocation,
   isTargetHealthReady,
   parseAppState,
   runCutover,
