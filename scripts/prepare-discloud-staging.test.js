@@ -8,6 +8,7 @@ const {
   cleanupStaging,
   prepareStaging,
   readCleanTrackedFiles,
+  readRequiredArgument,
 } = require('./prepare-discloud-staging');
 
 function createFixture(baseDirectory = tmpdir()) {
@@ -25,7 +26,7 @@ function createFixture(baseDirectory = tmpdir()) {
   writeFileSync(path.join(project, 'discloud.config'), [
     'NAME=Dark Bot',
     'TYPE=site',
-    'ID=dta-admin',
+    'ID=admin-dta-bot',
     'MAIN=build/index.js',
     'RAM=512',
   ].join('\n'));
@@ -36,7 +37,7 @@ function createFixture(baseDirectory = tmpdir()) {
     'DATABASE_URL=file:./prisma/darkbot.db',
     'ADMIN_PANEL_ENABLED=true',
     `DISCORD_CLIENT_SECRET=${'s'.repeat(32)}`,
-    'DISCORD_REDIRECT_URI=https://dta-admin.discloud.app/api/auth/callback',
+    'DISCORD_REDIRECT_URI=https://admin-dta-bot.discloud.app/api/auth/callback',
     `PANEL_COOKIE_SECRET=${'c'.repeat(32)}`,
     `PANEL_ENCRYPTION_KEY=${Buffer.alloc(32, 1).toString('base64')}`,
     'PORT=8080',
@@ -221,7 +222,7 @@ test('rejects bot hosting configuration and incomplete panel secrets', () => {
       trackedFiles: ['src/index.ts', 'discloud.config'],
     }), /TYPE=site/i);
 
-    writeFileSync(path.join(fixture.project, 'discloud.config'), 'TYPE=site\nID=dta-admin\nRAM=512\n');
+    writeFileSync(path.join(fixture.project, 'discloud.config'), 'TYPE=site\nID=admin-dta-bot\nRAM=512\n');
     writeFileSync(path.join(fixture.project, '.env'), 'DISCORD_TOKEN=token\n');
     assert.throws(() => prepareStaging({
       projectRoot: fixture.project,
@@ -254,15 +255,10 @@ test('rejects placeholder Discord credentials', () => {
   }
 });
 
-test('accepts an HTTPS OAuth callback on a verified custom domain', () => {
+test('accepts an HTTPS OAuth callback matching the configured Discloud subdomain', () => {
   const fixture = createFixture();
   try {
     const envPath = path.join(fixture.project, '.env');
-    const environment = readFileSync(envPath, 'utf8').replace(
-      'https://dta-admin.discloud.app/api/auth/callback',
-      'https://admin-dta-bot.com/api/auth/callback',
-    );
-    writeFileSync(envPath, environment);
 
     prepareStaging({
       projectRoot: fixture.project,
@@ -277,14 +273,69 @@ test('accepts an HTTPS OAuth callback on a verified custom domain', () => {
   }
 });
 
+test('requires an explicit production database argument', () => {
+  assert.equal(readRequiredArgument(['node', 'script', '--database', 'backup.db'], '--database'), 'backup.db');
+  assert.throws(() => readRequiredArgument(['node', 'script'], '--database'), /--database/i);
+  assert.throws(
+    () => readRequiredArgument(['node', 'script', '--database', '--output', 'stage'], '--database'),
+    /--database/i,
+  );
+});
+
+test('rejects a deployment subdomain other than admin-dta-bot', () => {
+  const fixture = createFixture();
+  try {
+    writeFileSync(path.join(fixture.project, 'discloud.config'), 'TYPE=site\nID=dta-admin\nRAM=512\n');
+    const envPath = path.join(fixture.project, '.env');
+    const environment = readFileSync(envPath, 'utf8').replace(
+      'https://admin-dta-bot.discloud.app/api/auth/callback',
+      'https://dta-admin.discloud.app/api/auth/callback',
+    );
+    writeFileSync(envPath, environment);
+
+    assert.throws(() => prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath,
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    }), /admin-dta-bot/i);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('rejects a custom domain callback when deployment uses a Discloud subdomain', () => {
+  const fixture = createFixture();
+  try {
+    const envPath = path.join(fixture.project, '.env');
+    const environment = readFileSync(envPath, 'utf8').replace(
+      'https://admin-dta-bot.discloud.app/api/auth/callback',
+      'https://admin-dta-bot.com/api/auth/callback',
+    );
+    writeFileSync(envPath, environment);
+
+    assert.throws(() => prepareStaging({
+      projectRoot: fixture.project,
+      outputDirectory: fixture.output,
+      envPath,
+      databasePath: path.join(fixture.project, 'prisma', 'prisma', 'darkbot.db'),
+      trackedFiles: ['src/index.ts', 'discloud.config'],
+    }), /DISCORD_REDIRECT_URI/i);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('rejects unsafe OAuth callback URL variants', () => {
   const unsafeCallbacks = [
-    'http://admin-dta-bot.com/api/auth/callback',
-    'https://admin-dta-bot.com:8443/api/auth/callback',
-    'https://user:pass@admin-dta-bot.com/api/auth/callback',
-    'https://admin-dta-bot.com/api/auth/callback?next=evil',
-    'https://admin-dta-bot.com/api/auth/callback#fragment',
-    'https://admin-dta-bot.com/api/auth/other',
+    'http://admin-dta-bot.discloud.app/api/auth/callback',
+    'https://admin-dta-bot.discloud.app:8443/api/auth/callback',
+    'https://user:pass@admin-dta-bot.discloud.app/api/auth/callback',
+    'https://admin-dta-bot.discloud.app/api/auth/callback?next=evil',
+    'https://admin-dta-bot.discloud.app/api/auth/callback#fragment',
+    'https://admin-dta-bot.discloud.app/api/auth/other',
+    'https://dta-admin.discloud.app/api/auth/callback',
     'https://unapproved.example/api/auth/callback',
   ];
 
@@ -293,7 +344,7 @@ test('rejects unsafe OAuth callback URL variants', () => {
     try {
       const envPath = path.join(fixture.project, '.env');
       const environment = readFileSync(envPath, 'utf8').replace(
-        'https://dta-admin.discloud.app/api/auth/callback',
+        'https://admin-dta-bot.discloud.app/api/auth/callback',
         callback,
       );
       writeFileSync(envPath, environment);

@@ -8,10 +8,10 @@ Estado verificado em 29 de julho de 2026:
 
 - conta Discloud no plano Diamond;
 - 4096 MB totais e 1024 MB alocados;
-- site `dta-admin` online com 512 MB e `AUTORESTART=true`;
+- site atual `dta-admin` online com 512 MB e `AUTORESTART=true`;
 - app anterior `1785101572014` offline, mantido somente para rollback imediato;
-- subdominio `dta-admin` associado ao site;
-- subdominio `admin-dta-bot` reservado e disponivel, sem alterar a producao;
+- subdominio `dta-admin` associado ao site atual;
+- subdominio `admin-dta-bot` reservado para o novo site;
 - bot e painel executados pelo mesmo processo no site `dta-admin`;
 - Discloud CLI `2.11.1` instalada.
 
@@ -25,50 +25,23 @@ Estado verificado em 29 de julho de 2026:
 - Chaves novas de cookie e criptografia geradas localmente.
 - Somente uma instancia usando `DISCORD_TOKEN` e o arquivo SQLite.
 
-## 1. Confirmar os subdominios
+## 1. Confirmar o subdominio
 
 O nome deve ter ate 20 caracteres e aceitar apenas letras, numeros e hifen.
 
-O site continua em `dta-admin`. `admin-dta-bot` fica reservado para uma migracao posterior, depois que o callback OAuth correspondente estiver cadastrado. Confirme ambos:
+O destino aprovado e `admin-dta-bot`. Confirme a reserva antes do corte:
 
 ```powershell
-discloud subdomain info --id dta-admin
 discloud subdomain info --id admin-dta-bot
 ```
 
 URL esperada:
 
 ```text
-https://dta-admin.discloud.app
+https://admin-dta-bot.discloud.app
 ```
 
-Nao altere `ID=dta-admin` enquanto a producao estiver ativa nesse endereco. Trocar o ID exige um corte controlado e cadastro previo do novo callback no Discord.
-
-### Dominio personalizado
-
-O dominio desejado e `admin-dta-bot.com`. Ele precisa estar registrado em um provedor externo e sob controle do proprietario antes de ser vinculado. Depois da compra:
-
-1. Cadastre `https://admin-dta-bot.com/api/auth/callback` no Discord Developer Portal.
-2. Registre o dominio personalizado na Discloud e vincule-o ao app `dta-admin`:
-
-   ```powershell
-   discloud domain create --id admin-dta-bot.com --app dta-admin
-   discloud domain info --id admin-dta-bot.com
-   ```
-
-3. Configure os registros A e TXT exibidos pela Discloud no provedor DNS.
-4. Mantenha o proxy Cloudflare desativado, caso use Cloudflare.
-5. Verifique o dominio:
-
-   ```powershell
-   discloud domain verify --id admin-dta-bot.com
-   discloud domain info --id admin-dta-bot.com
-   ```
-
-6. Atualize `DISCORD_REDIRECT_URI` e faca novo deploy. O `app commit` executado na secao 7 faz a reconstrucao da aplicacao e ativa o vinculo.
-7. Execute o smoke test completo antes de retirar o callback anterior.
-
-Nao altere a URL OAuth antes da verificacao DNS e do cadastro do callback. A reserva do subdominio Discloud nao registra nem compra o dominio `.com`.
+O site atual permanece em `dta-admin` ate o corte. Nao execute os dois sites ao mesmo tempo porque ambos usam o mesmo token Discord e banco SQLite.
 
 ## 2. Configurar OAuth2 no Discord
 
@@ -77,7 +50,7 @@ No Discord Developer Portal, abra a mesma aplicacao do bot e acesse `OAuth2`.
 Adicione exatamente:
 
 ```text
-https://dta-admin.discloud.app/api/auth/callback
+https://admin-dta-bot.discloud.app/api/auth/callback
 ```
 
 O painel solicita apenas os scopes `identify` e `guilds`. Nao adicione `bot`, `applications.commands` ou `guilds.join` ao login do painel.
@@ -93,7 +66,7 @@ Atualize somente o `.env` ignorado pelo Git:
 ```env
 ADMIN_PANEL_ENABLED=true
 DISCORD_CLIENT_SECRET=<client-secret>
-DISCORD_REDIRECT_URI=https://dta-admin.discloud.app/api/auth/callback
+DISCORD_REDIRECT_URI=https://admin-dta-bot.discloud.app/api/auth/callback
 PANEL_COOKIE_SECRET=<segredo-gerado>
 PANEL_ENCRYPTION_KEY=<chave-gerada>
 PORT=8080
@@ -105,12 +78,15 @@ Mantenha sem alteracao os valores atuais de `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD
 ## 4. Fazer backup
 
 ```powershell
-discloud app backup dta-admin discloud\backups --save
-Get-ChildItem discloud\backups -Recurse -File
+$preflightBackup = "discloud\backups\preflight-admin-dta-bot-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+New-Item -ItemType Directory -Path $preflightBackup | Out-Null
+discloud app backup dta-admin $preflightBackup --save
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao baixar backup de dta-admin.' }
+Get-ChildItem $preflightBackup -Recurse -File
 git rev-parse HEAD
 ```
 
-Confirme que o backup tem `prisma/prisma/darkbot.db`. A Discloud pode omitir o `.env` do arquivo baixado. Nesse caso, proteja uma copia local para o usuario atual do Windows com DPAPI:
+Esse backup preliminar valida o mecanismo de restauracao. A secao 7 baixa outro backup depois de parar `dta-admin`; somente esse banco congelado entra no staging. A Discloud pode omitir o `.env` do arquivo baixado. Nesse caso, proteja uma copia local para o usuario atual do Windows com DPAPI:
 
 ```powershell
 Add-Type -AssemblyName System.Security
@@ -149,7 +125,7 @@ BUILD=npm run build
 START=npm run start
 AUTORESTART=true
 AVATAR=https://pxdrop.online/raw/d9fv0fmhv1ts73baugmg?file
-ID=dta-admin
+ID=admin-dta-bot
 ```
 
 O codigo ja usa `0.0.0.0` e a variavel `PORT`. Nao altere nomes, descricoes ou opcoes em `src/commands` durante este corte.
@@ -169,48 +145,39 @@ O teste de contrato deve listar os 11 comandos aprovados. O diff de `src/command
 
 ## 7. Deploy
 
-O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O script de staging exige uma arvore Git limpa, executa o build local, copia os arquivos rastreados e acrescenta `build/`, `panel/dist/`, `.env` e SQLite sem imprimir segredos. A saida so pode ficar no diretorio temporario do sistema. O script bloqueia junctions e links simbolicos, valida `TYPE=site`, subdominio, RAM, callback, porta e segredos obrigatorios. Os artefatos compilados precisam estar no pacote porque `discloud app commit` atualiza os arquivos, mas pode preservar o `build/` anterior sem executar `BUILD`.
+O `.discloudignore` do repositorio exclui `.env` e bancos. Nao o altere. O cutover exige arvore Git limpa e usa o banco SQLite baixado do app `dta-admin`, nunca uma copia local antiga.
+
+Execute primeiro o preflight sem alterar o estado dos apps:
 
 ```powershell
-$stage = Join-Path $env:TEMP "dta-admin-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
-npm run deploy:stage -- --output $stage
+npm run deploy:cutover -- --preflight
 ```
 
-Inspecione o staging sem imprimir o conteudo do `.env`:
+O preflight bloqueia o corte se o callback OAuth nao estiver cadastrado, se `discloud.config` ou `.env` apontarem para outro host, se `dta-admin` nao estiver online, se `admin-dta-bot` ja existir ou se o app legado `1785101572014` nao estiver offline.
+
+Depois do preflight aprovado, execute o corte:
 
 ```powershell
-Get-ChildItem $stage -Force | Select-Object Name,Length
-Get-Item (Join-Path $stage '.env'),(Join-Path $stage 'prisma\prisma\darkbot.db') | Select-Object FullName,Length
+npm run deploy:cutover -- --execute
 ```
 
-Mantenha o app antigo offline e envie o staging somente ao site existente:
+O comando para `dta-admin`, confirma o estado offline, baixa um backup congelado da Discloud, valida o SQLite com `PRAGMA integrity_check`, prepara o pacote temporario, compara o SHA-256 dos bancos, envia `admin-dta-bot` e aguarda `/health` com `botReady: true` e `commandCount: 11`. Todos os processos da CLI e requisicoes HTTP possuem timeout. Se uma etapa falhar antes do upload, ele confirma que o alvo esta ausente e reativa `dta-admin`. Depois de um upload iniciado, o alvo existente recebe uma parada manual e um backup de recuperacao antes do rollback. Se a criacao ainda aparecer como `missing`, a origem permanece offline para inspecao, evitando duas instancias com o mesmo token. O staging com `.env` e banco e apagado no final; os backups permanecem em `discloud/backups/`, ignorados pelo Git.
 
-```powershell
-Push-Location $stage
-try {
-  discloud app commit dta-admin
-  if ($LASTEXITCODE -ne 0) { throw 'Falha no commit do site dta-admin.' }
-} finally {
-  Pop-Location
-  npm run deploy:stage -- --cleanup $stage
-}
-
-$health = Invoke-RestMethod https://dta-admin.discloud.app/health
-if (-not $health.data.botReady) { throw 'Site respondeu, mas o bot nao esta pronto.' }
-```
-
-O `finally` remove o `.env` e o banco temporarios mesmo quando o commit falha. A limpeza recusa diretorios sem o marcador privado criado pelo script. Nao inicie o app antigo como resposta automatica a uma falha de deploy.
+Atualizacoes posteriores usam `discloud app commit admin-dta-bot` em vez de `app upload`.
 
 ## 8. Smoke test
 
 ```powershell
+discloud app status admin-dta-bot
+discloud app logs admin-dta-bot
 discloud app status dta-admin
-discloud app logs dta-admin
 discloud app status 1785101572014
-Invoke-RestMethod https://dta-admin.discloud.app/health
+$health = Invoke-RestMethod https://admin-dta-bot.discloud.app/health
+if (-not $health.data.botReady) { throw 'Site respondeu, mas o bot nao esta pronto.' }
+if ($health.data.commandCount -ne 11) { throw 'Os 11 comandos ainda nao foram sincronizados.' }
 ```
 
-O site deve ficar online e o app `1785101572014` deve permanecer offline.
+O site `admin-dta-bot` deve ficar online; `dta-admin` e `1785101572014` devem permanecer offline.
 
 Validar nos logs:
 
@@ -250,29 +217,35 @@ Observe por pelo menos 15 minutos:
 Se a memoria ficar proxima do limite, aumente a RAM pelo painel ou CLI sem alterar codigo:
 
 ```powershell
-discloud app ram dta-admin 768
+discloud app ram admin-dta-bot 768
 ```
 
 ## 10. Rollback
 
 Rollback imediato se o bot nao ficar online, o banco nao abrir, os comandos mudarem ou o painel expuser acesso indevido.
 
-1. Pare o site `dta-admin`.
+O comando de cutover executa rollback automatico durante uma falha. Para uma emergencia posterior:
+
+1. Pare o site `admin-dta-bot`.
 2. Confirme que ele ficou offline.
-3. Inicie o app anterior `1785101572014`.
-4. Confirme bot, pools e os 11 comandos antes de liberar uso.
+3. Confirme que `1785101572014` continua offline.
+4. Inicie o site anterior `dta-admin`.
+5. Confirme bot, pools e os 11 comandos antes de liberar uso.
 
 ```powershell
-discloud app stop dta-admin
-discloud app status dta-admin
-```
-
-Prossiga somente quando a tabela mostrar `Offline`. Se a parada falhar ou continuar pendente, nao inicie o app antigo.
-
-```powershell
-discloud app start 1785101572014
+discloud app stop admin-dta-bot
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao parar admin-dta-bot.' }
+discloud app status admin-dta-bot
 discloud app status 1785101572014
-discloud app logs 1785101572014
 ```
 
-Esse rollback imediato retorna ao banco congelado no momento do corte. Se o site ja recebeu novos confrontos ou configuracoes, baixe primeiro um backup de `dta-admin` e planeje a reconciliacao do SQLite antes de iniciar o app antigo. Nao execute dois processos com o mesmo token e nao rode `git add` dentro de staging ou backup.
+Prossiga somente se a saida mostrar os dois apps offline.
+
+```powershell
+discloud app start dta-admin
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar dta-admin.' }
+discloud app status dta-admin
+discloud app logs dta-admin
+```
+
+Esse rollback imediato retorna ao banco congelado no momento do corte. Se o novo site ja recebeu confrontos ou configuracoes, baixe primeiro um backup de `admin-dta-bot` e planeje a reconciliacao do SQLite antes de iniciar o site antigo. Nao execute dois processos com o mesmo token e nao rode `git add` dentro de staging ou backup.

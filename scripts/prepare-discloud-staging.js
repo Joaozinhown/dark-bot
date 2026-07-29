@@ -16,7 +16,7 @@ const { execFileSync } = require('node:child_process');
 
 const STAGING_MARKER = '.dta-discloud-staging';
 const STAGING_MARKER_CONTENT = 'DTA Discloud staging directory\n';
-const APPROVED_CUSTOM_DOMAINS = new Set(['admin-dta-bot.com']);
+const PRODUCTION_SUBDOMAIN = 'admin-dta-bot';
 
 const REQUIRED_ENVIRONMENT_VARIABLES = [
   'DISCORD_TOKEN',
@@ -78,6 +78,9 @@ function readDeploymentConfig(projectRoot) {
   if (!/^[a-z0-9-]{1,20}$/i.test(subdomain)) {
     throw new Error('discloud.config ID must be a valid Discloud subdomain.');
   }
+  if (subdomain !== PRODUCTION_SUBDOMAIN) {
+    throw new Error(`discloud.config ID must be ${PRODUCTION_SUBDOMAIN}.`);
+  }
   const ram = Number(config.get('RAM'));
   if (!Number.isSafeInteger(ram) || ram < 512) throw new Error('discloud.config RAM must be at least 512 MB.');
   return { subdomain };
@@ -117,17 +120,15 @@ function readDeploymentEnvironment(envPath, subdomain) {
     throw new Error('DISCORD_REDIRECT_URI must be a valid HTTPS callback URL.');
   }
   const expectedHost = `${subdomain}.discloud.app`;
-  const isApprovedHost = redirect.hostname === expectedHost
-    || APPROVED_CUSTOM_DOMAINS.has(redirect.hostname);
   if (redirect.protocol !== 'https:'
-    || !isApprovedHost
+    || redirect.hostname !== expectedHost
     || redirect.port
     || redirect.username
     || redirect.password
     || redirect.pathname !== '/api/auth/callback'
     || redirect.search
     || redirect.hash) {
-    throw new Error(`DISCORD_REDIRECT_URI must be https://${expectedHost}/api/auth/callback or the same path on a verified custom domain.`);
+    throw new Error(`DISCORD_REDIRECT_URI must be https://${expectedHost}/api/auth/callback.`);
   }
 }
 
@@ -270,9 +271,15 @@ function prepareStaging(options) {
   return { outputDirectory, trackedFileCount: trackedFiles.length, subdomain };
 }
 
-function readArgument(name) {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+function readArgument(name, argv = process.argv) {
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] : undefined;
+}
+
+function readRequiredArgument(argv, name) {
+  const value = readArgument(name, argv);
+  if (!value || value.startsWith('--')) throw new Error(`${name} is required.`);
+  return value;
 }
 
 function buildProject(projectRoot) {
@@ -294,8 +301,9 @@ function runCli() {
   }
   const outputDirectory = readArgument('--output');
   if (!outputDirectory) {
-    throw new Error('Usage: node scripts/prepare-discloud-staging.js --output <path> | --cleanup <path>');
+    throw new Error('Usage: node scripts/prepare-discloud-staging.js --output <path> --database <backup-db> | --cleanup <path>');
   }
+  const databasePath = readRequiredArgument(process.argv, '--database');
   const trackedFiles = readCleanTrackedFiles(projectRoot);
   buildProject(projectRoot);
   const verifiedTrackedFiles = readCleanTrackedFiles(projectRoot);
@@ -306,7 +314,7 @@ function runCli() {
     projectRoot,
     outputDirectory,
     envPath: readArgument('--env') ?? path.join(projectRoot, '.env'),
-    databasePath: readArgument('--database') ?? path.join(projectRoot, 'prisma', 'prisma', 'darkbot.db'),
+    databasePath,
     trackedFiles,
   });
   process.stdout.write(`Staging ready: ${result.outputDirectory}\n`);
@@ -324,4 +332,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { cleanupStaging, prepareStaging, readCleanTrackedFiles };
+module.exports = { cleanupStaging, prepareStaging, readCleanTrackedFiles, readRequiredArgument };

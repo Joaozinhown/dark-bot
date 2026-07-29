@@ -99,7 +99,7 @@ Responsabilidades principais:
 - Node.js 22 ou superior.
 - Aplicacao Discord com bot configurado.
 - SQLite local ou volume persistente na hospedagem.
-- Discloud Diamond para publicar o painel e usar dominio personalizado.
+- Discloud Diamond para publicar o painel em subdominio proprio da plataforma.
 
 ## Instalacao local
 
