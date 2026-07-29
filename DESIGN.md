@@ -62,7 +62,7 @@ components:
 
 ## Overview
 
-**Creative North Star: "Mesa de Operacao Queens Trials"**
+**Creative North Star: "Mesa de Operacao Dark Trials Arena"**
 
 Interface escura e densa para staff trabalhando durante partidas ao vivo. Identidade vem da logo, do violeta e da linguagem competitiva; estrutura permanece familiar, previsivel e rapida.
 
@@ -113,7 +113,7 @@ Fundo escuro, borda de 1px e raio de 4px. Erro apresenta texto objetivo; placeho
 
 ### Navigation
 
-Sidebar de 232px no desktop, reduzida a icones no tablet e substituida por navegacao inferior no mobile. Logo Queens Trials e seletor de servidor ficam no topo.
+Sidebar de 232px no desktop, reduzida a icones no tablet e substituida por navegacao inferior no mobile. Simbolo DTA, nome Dark Trials Arena e seletor de servidor ficam no topo.
 
 ### Status
 

@@ -35,7 +35,7 @@ export const mockGuilds: Guild[] = [
   },
   {
     id: '1248523813054197918',
-    name: 'Queens Trials Staff',
+    name: 'DTA Staff',
     icon: null,
     accessSource: 'admin_role',
     capabilities: ['manage_bot'],
@@ -56,7 +56,7 @@ const activeConfrontations: ActiveConfrontation[] = [
     poolId: 3,
     formato: 'MD5',
     status: 'veto',
-    timeARoleId: 'team-queens',
+    timeARoleId: 'team-aurora',
     timeBRoleId: 'team-eclipse',
     timeAVitorias: 1,
     timeBVitorias: 1,
@@ -96,7 +96,7 @@ export const mockPools: Pool[] = [
 ];
 
 export const mockTeams: Team[] = [
-  { id: 'team-queens', name: 'Queens of the Fog', color: '#8f32d9', memberCount: 7, position: 12 },
+  { id: 'team-aurora', name: 'Aurora', color: '#8f32d9', memberCount: 7, position: 12 },
   { id: 'team-eclipse', name: 'Eclipse Gaming', color: '#dc143c', memberCount: 6, position: 11 },
   { id: 'team-legacy', name: 'Legacy Survivors', color: '#c9a227', memberCount: 8, position: 10 },
   { id: 'team-void', name: 'Void Walkers', color: '#2ecc71', memberCount: 5, position: 9 },
@@ -112,7 +112,7 @@ export const mockRecentConfrontations: ConfrontationSummary[] = [
 ];
 
 export const mockRanking: RankingEntry[] = [
-  { nome: 'Queens of the Fog', vitorias: 12, derrotas: 3 },
+  { nome: 'Aurora', vitorias: 12, derrotas: 3 },
   { nome: 'Legacy Survivors', vitorias: 10, derrotas: 5 },
   { nome: 'Eclipse Gaming', vitorias: 8, derrotas: 6 },
   { nome: 'Void Walkers', vitorias: 6, derrotas: 7 },
@@ -141,7 +141,7 @@ export const mockAudit: AuditEntry[] = [
     action: 'confrontation.closed',
     entityType: 'confrontation',
     entityId: '183',
-    details: { reason: 'Série concluída', winner: 'Queens of the Fog' },
+    details: { reason: 'Série concluída', winner: 'Aurora' },
     criadoEm: isoBefore(176),
   },
   {
@@ -151,7 +151,7 @@ export const mockAudit: AuditEntry[] = [
     action: 'result.recorded',
     entityType: 'set',
     entityId: '183-4',
-    details: { winner: 'Queens of the Fog', score: '3-1' },
+    details: { winner: 'Aurora', score: '3-1' },
     criadoEm: isoBefore(182),
   },
   {

@@ -9,7 +9,11 @@ test('renders the authenticated operational workspace without overflow', async (
 
   const logo = page.locator('img:visible').first();
   await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute('src', '/dta-symbol.png');
   await expect.poll(() => logo.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const brandName = page.getByText('Dark Trials Arena', { exact: true }).first();
+  if ((page.viewportSize()?.width ?? 0) > 720) await expect(brandName).toBeVisible();
+  else await expect(brandName).toBeHidden();
 
   const overflow = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
