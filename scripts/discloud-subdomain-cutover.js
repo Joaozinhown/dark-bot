@@ -192,13 +192,17 @@ function isTargetHealthReady(body) {
     && body?.data?.commandCount === EXPECTED_COMMAND_COUNT;
 }
 
+function buildArchiveExtractionInvocation(archivePath, destinationPath) {
+  return {
+    command: process.platform === 'win32' ? 'tar.exe' : 'tar',
+    args: ['-xf', archivePath, '-C', destinationPath],
+  };
+}
+
 function extractArchive(archivePath, destinationPath) {
   mkdirSync(destinationPath, { recursive: false });
-  const command = [
-    "$ErrorActionPreference='Stop'",
-    'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1]',
-  ].join('; ');
-  runCommand('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command, archivePath, destinationPath]);
+  const invocation = buildArchiveExtractionInvocation(archivePath, destinationPath);
+  runCommand(invocation.command, invocation.args);
 }
 
 function downloadBackupArchive(app, label) {
@@ -346,6 +350,7 @@ module.exports = {
   LEGACY_APP,
   SOURCE_APP,
   TARGET_APP,
+  buildArchiveExtractionInvocation,
   buildSpawnInvocation,
   isTargetHealthReady,
   parseAppState,

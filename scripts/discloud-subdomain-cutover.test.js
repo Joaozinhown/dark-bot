@@ -1,11 +1,18 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
+  buildArchiveExtractionInvocation,
   buildSpawnInvocation,
   isTargetHealthReady,
   parseAppState,
   runCutover,
 } = require('./discloud-subdomain-cutover');
+
+test('extracts backups without passing paths through a command shell', () => {
+  const invocation = buildArchiveExtractionInvocation('C:\\backup path\\app.zip', 'C:\\extract path');
+  assert.equal(invocation.command, process.platform === 'win32' ? 'tar.exe' : 'tar');
+  assert.deepEqual(invocation.args, ['-xf', 'C:\\backup path\\app.zip', '-C', 'C:\\extract path']);
+});
 
 test('runs the Windows Discloud JavaScript entrypoint without a command shell', () => {
   const entrypoint = String.raw`C:\Users\tester\AppData\Roaming\npm\node_modules\discloud-cli\bin\discloud`;
