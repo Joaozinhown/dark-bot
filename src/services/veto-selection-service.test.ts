@@ -65,6 +65,7 @@ test('commits a pick and its actor audit payload atomically', async () => {
       turn: 'B',
       killersSerialized: '["Artist","Spirit"]',
       pickedKillersSerialized: '["Nurse"]',
+      messageId: null,
     },
     audit: {
       guildId: '100000000000000001',

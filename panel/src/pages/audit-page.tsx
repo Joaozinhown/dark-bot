@@ -124,13 +124,13 @@ function AuditActor({ entry, view }: { entry: AuditEntry; view: AuditView }) {
     <div className="audit-actor">
       <strong>{view.actorName}</strong>
       {view.actorUsername ? <span>@{view.actorUsername}</span> : null}
-      <code>{entry.actorUserId}</code>
+      {view.actorName !== entry.actorUserId ? <code>{entry.actorUserId}</code> : null}
     </div>
   );
 }
 
 function AuditChoice({ view }: { view: AuditView }) {
-  if (!view.killer && !view.team) return <span className="cell-muted">Sem item competitivo</span>;
+  if (!view.killer && !view.team) return <span className="cell-muted" aria-label="Não aplicável">—</span>;
   return (
     <div className="audit-choice">
       {view.killer ? <strong>{view.killer}</strong> : null}
@@ -212,7 +212,7 @@ export function AuditPage() {
               <AuditActor entry={entry} view={view} />
               <div className="audit-mobile-record__context">
                 <div><span>Alvo</span><strong>{view.target}{view.context ? ` / ${view.context}` : ''}</strong></div>
-                <div><span>Escolha</span><AuditChoice view={view} /></div>
+                {view.tone !== 'admin' ? <div><span>Escolha</span><AuditChoice view={view} /></div> : null}
               </div>
               <AuditDetails entry={entry} />
             </article>;

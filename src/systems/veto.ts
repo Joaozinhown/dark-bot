@@ -21,6 +21,29 @@ import {
 import { guildEventBus } from '../web/realtime/event-bus';
 import { createSetAssignments, getVetoAction } from './veto-rules';
 
+const VETO_STEP_SEND_ATTEMPTS = 3;
+const VETO_STEP_RETRY_DELAY_MS = 750;
+
+async function sendVetoStepWithRetry(
+  guild: Guild,
+  confrontoId: number,
+  channel: TextChannel,
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= VETO_STEP_SEND_ATTEMPTS; attempt += 1) {
+    try {
+      await sendVetoStep(guild, confrontoId, channel);
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+      if (attempt < VETO_STEP_SEND_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, VETO_STEP_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export async function startVeto(
   guild: Guild,
   confrontoId: number,
@@ -86,15 +109,35 @@ async function sendVetoStep(
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(banSelect);
   const actionTextContent = action === 'pick' ? 'escolher o Killer' : 'banir um Killer';
   const message = await canalTexto.send({
+    nonce: `v-${confrontoId}-${stepIndex}`,
+    enforceNonce: true,
     content: `<@&${vezRole.id}>, chegou a vez do seu time **${actionTextContent}**!`,
     embeds: [embed],
     components: [row],
   });
 
-  await prisma.vetoState.update({
-    where: { confrontoId },
-    data: { messageId: message.id },
-  });
+  try {
+    const updated = await prisma.vetoState.updateMany({
+      where: { confrontoId, set: stepIndex, messageId: null },
+      data: { messageId: message.id },
+    });
+    if (updated.count !== 1) {
+      const currentState = await prisma.vetoState.findUnique({ where: { confrontoId } });
+      if (currentState?.messageId !== message.id) {
+        await message.delete().catch(() => undefined);
+      }
+    }
+  } catch (error: unknown) {
+    let currentState;
+    try {
+      currentState = await prisma.vetoState.findUnique({ where: { confrontoId } });
+    } catch {
+      throw error;
+    }
+    if (currentState?.messageId === message.id) return;
+    await message.delete().catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function handleBanSelection(
@@ -229,13 +272,23 @@ export async function handleBanSelection(
     console.error(`[Veto] Escolha persistida, mas a mensagem ${interaction.message.id} nao foi atualizada:`, error);
   }
 
-  await sendVetoStep(interaction.guild!, confrontoId, interaction.channel as TextChannel);
   guildEventBus.publish(confronto.guildId, `veto.${selection.action}`, {
     confrontationId: confrontoId,
     actorUserId: interaction.user.id,
     killer: selection.selectedKiller,
     setNumber: selection.setNumber,
   });
+
+  try {
+    await sendVetoStepWithRetry(interaction.guild!, confrontoId, interaction.channel as TextChannel);
+  } catch (error: unknown) {
+    console.error(`[Veto] Escolha persistida, mas a proxima etapa do confronto ${confrontoId} nao foi enviada:`, error);
+    await interaction.followUp({
+      embeds: [createErrorEmbed('A escolha foi registrada, mas a proxima etapa nao foi enviada apos tres tentativas. Avise a staff.')],
+      flags: 64,
+    });
+    return;
+  }
 
   if (editFailure) {
     await interaction.followUp({
@@ -288,10 +341,11 @@ async function finalizeVeto(
       where: { id: confrontoId },
       data: { status: 'em_andamento', currentSet: 1 },
     }),
-    prisma.vetoState.delete({ where: { confrontoId } }),
   ]);
 
   await canalTexto.send({
+    nonce: `v-final-${confrontoId}`,
+    enforceNonce: true,
     content: `Os times <@&${timeARole.id}> e <@&${timeBRole.id}> definiram todos os Killers para o confronto!
 Por favor, confiram na tabela abaixo qual time começará de Killer em cada SET.`,
     embeds: [createSetsReadyEmbed(
@@ -302,4 +356,10 @@ Por favor, confiram na tabela abaixo qual time começará de Killer em cada SET.
       `<@&${timeBRole.id}>`
     )],
   });
+
+  try {
+    await prisma.vetoState.deleteMany({ where: { confrontoId } });
+  } catch (error: unknown) {
+    console.error(`[Veto] Confronto ${confrontoId} finalizado, mas o estado de veto nao foi removido:`, error);
+  }
 }

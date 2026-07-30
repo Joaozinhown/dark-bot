@@ -56,6 +56,7 @@ export interface CommitVetoSelectionInput {
     readonly turn: VetoVez;
     readonly killersSerialized: string;
     readonly pickedKillersSerialized: string;
+    readonly messageId: null;
   };
   readonly audit: {
     readonly guildId: string;
@@ -126,6 +127,7 @@ export const prismaVetoSelectionStore: VetoSelectionStore = {
           vezDe: input.next.turn,
           killersRestantes: input.next.killersSerialized,
           killerEscolhido: input.next.pickedKillersSerialized,
+          messageId: input.next.messageId,
         },
       });
       if (updated.count !== 1) return false;
@@ -185,6 +187,7 @@ export function createVetoSelectionService(
         turn: nextTurn,
         killersSerialized: JSON.stringify(remainingKillers),
         pickedKillersSerialized: JSON.stringify(nextPickedKillers),
+        messageId: null,
       },
       audit: {
         guildId: input.guildId,

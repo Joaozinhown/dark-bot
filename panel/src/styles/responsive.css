@@ -50,6 +50,10 @@
   .overview-grid { grid-template-columns: minmax(0, 1fr); }
   .overview-grid .page-section + .page-section { margin-top: 0; }
   .operation-status { min-height: auto; }
+  .overview-active-table,
+  .overview-pools-table { display: none; }
+  .overview-active-mobile,
+  .overview-pools-mobile { display: block; }
 }
 
 @media (max-width: 720px) {
@@ -169,6 +173,9 @@
   .icon-button,
   .user-menu__trigger,
   .guild-selector__control { min-height: 44px; }
+  .search-field input,
+  .select-field select,
+  .switch-control { min-height: 44px; }
   .form-grid { grid-template-columns: 1fr; }
   .admin-dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100vh - 16px); }
   .admin-dialog__body { max-height: calc(100vh - 96px); padding: 14px; }

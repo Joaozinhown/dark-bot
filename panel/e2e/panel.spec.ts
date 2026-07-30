@@ -23,7 +23,7 @@ test('renders the authenticated operational workspace without overflow', async (
   expect(overflow.page).toBeLessThanOrEqual(overflow.viewport);
   expect(overflow.rootOverflow).toBe('hidden');
 
-  if ((page.viewportSize()?.width ?? 0) <= 720) {
+  if ((page.viewportSize()?.width ?? 0) <= 900) {
     await expect(page.locator('.overview-active-mobile')).toBeVisible();
     await expect(page.locator('.overview-pools-mobile')).toBeVisible();
     await expect(page.locator('.overview-active-table')).toBeHidden();
