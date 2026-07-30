@@ -4,18 +4,45 @@ import {
   GatewayIntentBits,
   Collection,
   ChatInputCommandInteraction,
+  GuildMember,
 } from 'discord.js';
 import dotenv from 'dotenv';
 import http from 'http';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
-import { deployCommandsAuto, seedPools, ensureDatabase } from './startup';
+import {
+  deployCommandsAuto,
+  seedPools,
+  ensureDatabase,
+  syncGuildCommands,
+  syncPresetPoolsForGuild,
+} from './startup';
+import { createErrorEmbed } from './utils/embeds';
+import { hasBotAdminPermission } from './utils/permissions';
+import {
+  createCommandSettingService,
+  prismaCommandSettingStore,
+} from './services/command-setting-service';
+import { createDiscordOAuthClient } from './web/auth/discord-oauth';
+import { createSessionService } from './web/auth/session-service';
+import { readPanelConfig, type EnabledPanelConfig } from './web/config';
+import { createPanelRuntime } from './web/runtime';
+import { createWebApp } from './web/server';
+import { guildEventBus } from './web/realtime/event-bus';
+import { readPanelConfigSafely, runPanelBeforeBot } from './web/startup';
 
 dotenv.config();
 
 interface ClientCommands {
-  commands: Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>;
+  commands: Collection<string, CommandModule>;
+}
+
+interface CommandModule {
+  data?: {
+    toJSON: () => { name?: string; description?: string };
+  };
+  execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
 const client = new Client({
@@ -25,7 +52,19 @@ const client = new Client({
   ],
 }) as Client & ClientCommands;
 
-client.commands = new Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>();
+client.commands = new Collection<string, CommandModule>();
+
+const ADMIN_COMMANDS = new Set([
+  'criar-confronto',
+  'encerrar',
+  'gerenciar-cargo',
+  'gerenciar-pool',
+  'relatorios',
+  'resultado',
+  'setup-cargo',
+]);
+
+let commandPayloads: unknown[] = [];
 
 function startHealthServer() {
   const port = parseInt(process.env.PORT || '3000');
@@ -39,6 +78,26 @@ function startHealthServer() {
   });
 
   return server;
+}
+
+async function startAdminPanel(config: EnabledPanelConfig) {
+  const oauth = createDiscordOAuthClient({
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    redirectUri: config.redirectUri,
+  });
+  const sessions = createSessionService({
+    encryptionKey: config.encryptionKey.toString('base64'),
+  });
+  const app = await createWebApp({
+    config,
+    oauth,
+    sessions,
+    runtime: createPanelRuntime(client),
+  });
+  await app.listen({ port: config.port, host: '0.0.0.0' });
+  console.log(`[Dark Bot] Painel administrativo rodando na porta ${config.port}`);
+  return app;
 }
 
 function loadEvents() {
@@ -135,13 +194,45 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   try {
+    if (interaction.guildId) {
+      const commandSettings = createCommandSettingService(
+        prismaCommandSettingStore,
+        [...client.commands.keys()],
+      );
+      if (!(await commandSettings.isEnabled(interaction.guildId, interaction.commandName))) {
+        await interaction.reply({
+          embeds: [createErrorEmbed('Este comando esta desativado neste servidor.')],
+          flags: 64,
+        });
+        return;
+      }
+    }
+
+    if (ADMIN_COMMANDS.has(interaction.commandName)) {
+      const member = interaction.member instanceof GuildMember ? interaction.member : null;
+      const canUseCommand = member ? await hasBotAdminPermission(member) : false;
+
+      if (!canUseCommand) {
+        await interaction.reply({
+          embeds: [createErrorEmbed('Voce nao tem permissao para usar este comando.')],
+          flags: 64,
+        });
+        return;
+      }
+    }
+
     await command.execute(interaction);
+    if (interaction.guildId) {
+      guildEventBus.publish(interaction.guildId, 'command.executed', {
+        commandName: interaction.commandName,
+      });
+    }
   } catch (error) {
     console.error(`[Commands] Erro ao executar ${interaction.commandName}:`, error);
 
     const reply = {
       content: 'Ocorreu um erro ao executar este comando.',
-      ephemeral: true,
+      flags: 64,
     };
 
     if (interaction.replied || interaction.deferred) {
@@ -152,10 +243,31 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
+client.on(Events.GuildCreate, async guild => {
+  const token = getDiscordToken();
+  if (!token || commandPayloads.length === 0) return;
+
+  try {
+    await syncPresetPoolsForGuild(guild.id);
+    await syncGuildCommands(token, guild, commandPayloads);
+    guildEventBus.publish(guild.id, 'guild.connected', { guildId: guild.id });
+  } catch (error) {
+    console.error(`[Startup] Erro ao sincronizar comandos no servidor ${guild.id}:`, error);
+  }
+});
+
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
-  if (process.env.ENABLE_HTTP_SERVER === 'true' || process.env.PORT) {
+  const panelConfig = readPanelConfigSafely({
+    readConfig: readPanelConfig,
+    reportConfigError(error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[Dark Bot] Painel desabilitado por configuracao invalida: ${message}`);
+    },
+  });
+
+  if (!panelConfig.enabled && (process.env.ENABLE_HTTP_SERVER === 'true' || process.env.PORT)) {
     startHealthServer();
   }
 
@@ -173,16 +285,31 @@ async function main() {
     process.exit(1);
   }
 
-  // Sincroniza schema do banco (cria tabelas se nao existirem)
-  ensureDatabase();
+  await ensureDatabase();
 
-  // Semeia pools caso o banco esteja vazio
-  await seedPools();
+  await runPanelBeforeBot({
+    config: panelConfig,
+    startPanel: startAdminPanel,
+    reportPanelError(error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[Dark Bot] Painel indisponivel; bot continuara iniciando: ${message}`);
+    },
+    async startBot() {
+      await connectDiscordWithRetry(token);
 
-  await connectDiscordWithRetry(token);
+      for (const guildId of client.guilds.cache.keys()) {
+        guildEventBus.publish(guildId, 'bot.ready', { guildId });
+      }
 
-  // Registra comandos apos login (pode demorar)
-  client.commands = await deployCommandsAuto(token);
+      await seedPools(Array.from(client.guilds.cache.keys()));
+
+      // Registra comandos apos login (pode demorar)
+      client.commands = await deployCommandsAuto(token, client);
+      commandPayloads = Array.from(client.commands.values())
+        .map((command: CommandModule) => command.data?.toJSON())
+        .filter((payload): payload is { name?: string; description?: string } => Boolean(payload));
+    },
+  });
 }
 
 main().catch(error => {

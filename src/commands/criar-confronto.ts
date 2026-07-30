@@ -1,20 +1,20 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
   TextChannel,
 } from 'discord.js';
-import prisma from '../database/client';
-import { getPoolById, PoolFormato } from '../config';
-import { createTeamVoiceChannel, createConfrontoTextChannel } from '../utils/channels';
+import { PoolFormato } from '../config';
 import { createConfrontoEmbed, createErrorEmbed } from '../utils/embeds';
 import { startVeto } from '../systems/veto';
 import { ConfrontoData } from '../types/index';
+import {
+  confrontationService,
+  ConfrontationServiceError,
+} from '../services/confrontation-service';
 
 export const data = new SlashCommandBuilder()
   .setName('criar-confronto')
   .setDescription('Cria um confronto entre dois times')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addIntegerOption(option =>
     option
@@ -40,112 +40,64 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const timeA = interaction.options.getRole('time-a', true);
   const timeB = interaction.options.getRole('time-b', true);
 
-  const poolConfig = await getPoolById(poolId, interaction.guildId!);
-
-  if (!poolConfig) {
+  if (!(interaction.channel instanceof TextChannel)) {
     await interaction.reply({
-      embeds: [createErrorEmbed('Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.')],
-      ephemeral: true,
+      embeds: [createErrorEmbed('Use este comando em um canal de texto do confronto.')],
+      flags: 64,
     });
     return;
   }
 
-  if (poolConfig.mapas.length < 2) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('A pool precisa ter pelo menos 2 mapas para o sistema de veto funcionar.')],
-      ephemeral: true,
-    });
+  const textChannel = interaction.channel;
+
+  let created;
+  try {
+    created = await confrontationService.create(
+      {
+        guildId: interaction.guildId!,
+        poolId,
+        timeARoleId: timeA.id,
+        timeBRoleId: timeB.id,
+        channelId: textChannel.id,
+      },
+      () => interaction.deferReply(),
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof ConfrontationServiceError)) throw error;
+    const message = error.code === 'POOL_NOT_FOUND'
+      ? 'Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.'
+      : error.message;
+    await interaction.reply({ embeds: [createErrorEmbed(message)], flags: 64 });
     return;
   }
 
-  if (poolConfig.killers.length < 2) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('A pool precisa ter pelo menos 2 killers para o sistema de veto funcionar.')],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (timeA.id === timeB.id) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Os times devem ser diferentes.')],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.deferReply();
-
-  const confronto = await prisma.confronto.create({
-    data: {
-      guildId: interaction.guildId!,
-      poolId,
-      formato: poolConfig.formato,
-      timeARoleId: timeA.id,
-      timeBRoleId: timeB.id,
-      status: 'veto',
-    },
-  });
-
-  const vozTimeAId = await createTeamVoiceChannel(
-    interaction.guild!,
-    timeA.name,
-    timeA.id,
-    confronto.id,
-  );
-
-  const vozTimeBId = await createTeamVoiceChannel(
-    interaction.guild!,
-    timeB.name,
-    timeB.id,
-    confronto.id,
-  );
-
-  const channelId = await createConfrontoTextChannel(
-    interaction.guild!,
-    timeA.name,
-    timeB.name,
-    timeA.id,
-    timeB.id,
-    null,
-    confronto.id,
-  );
-
-  await prisma.confronto.update({
-    where: { id: confronto.id },
-    data: {
-      vozTimeAId,
-      vozTimeBId,
-      channelId,
-    },
-  });
-
-  const canalTexto = await interaction.guild!.channels.fetch(channelId);
-
-  if (!canalTexto?.isTextBased()) {
-    await interaction.editReply({
-      embeds: [createErrorEmbed('Erro ao criar canal de texto.')],
-    });
-    return;
-  }
-
-  const textChannel = canalTexto as TextChannel;
+  const { poolConfig, ...confronto } = created;
+  const primeiroKiller = confronto.primeiroKiller!;
 
   const confrontoData: ConfrontoData = {
     ...confronto,
     pool: poolId,
-    vozTimeAId,
-    vozTimeBId,
-    channelId,
+    channelId: textChannel.id,
     formato: confronto.formato as PoolFormato,
     vencedor: confronto.vencedor as 'A' | 'B' | null,
+    primeiroKiller: confronto.primeiroKiller as 'A' | 'B' | null,
   };
 
   const embed = createConfrontoEmbed(confrontoData, timeA.name, timeB.name);
 
-  await textChannel.send({ embeds: [embed] });
+  // Coin toss animation
+  await interaction.editReply({ content: '🪙 **Lançando a moeda...**' });
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  await interaction.editReply({ content: '🪙 **A moeda está no ar...**' });
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  const winnerName = primeiroKiller === 'A' ? timeA.name : timeB.name;
+  await interaction.editReply({ 
+    content: `🪙 Cara ou Coroa finalizado! O time **${winnerName}** venceu e começará de Killer!`,
+    embeds: [embed] 
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-  await interaction.editReply({ embeds: [embed] });
-
-  await startVeto(interaction.guild!, confronto.id, poolConfig, 1, textChannel);
+  await startVeto(interaction.guild!, confronto.id, poolConfig, primeiroKiller, textChannel);
 }

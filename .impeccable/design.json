@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-30T00:00:00-03:00",
+  "title": "Design System: DTA Admin Panel",
+  "extensions": {
+    "colorMeta": {
+      "background": { "role": "neutral", "displayName": "Arena Black", "canonical": "#070708", "tonalRamp": ["#070708", "#0e0f10", "#151617", "#242528", "#303136", "#48494f", "#a19d95", "#f4f0e6"] },
+      "surface": { "role": "neutral", "displayName": "Graphite Surface", "canonical": "#151617", "tonalRamp": ["#070708", "#0e0f10", "#151617", "#1c1d1f", "#242528", "#48494f", "#c5c0b7", "#f4f0e6"] },
+      "brand-red": { "role": "primary", "displayName": "DTA Claw Red", "canonical": "#df172c", "tonalRamp": ["#351116", "#6a101d", "#a31325", "#df172c", "#f02a3e", "#ff7180", "#ffadb5", "#ffe6e9"] },
+      "veto-red": { "role": "secondary", "displayName": "Veto Red", "canonical": "#d61128", "tonalRamp": ["#351015", "#68101c", "#9d1022", "#d61128", "#ee3a4d", "#f57381", "#f9abb3", "#fde5e8"] },
+      "winner-gold": { "role": "tertiary", "displayName": "Winner Gold", "canonical": "#c9a227", "tonalRamp": ["#302604", "#5c4808", "#8b6e11", "#c9a227", "#dabd5a", "#e7d48b", "#f1e5ba", "#faf5e3"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Page and compact panel headings." },
+      "body": { "displayName": "JetBrains Mono", "purpose": "Operational content, controls and tables." },
+      "label": { "displayName": "Label", "purpose": "Controls, metadata and status." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 12px 32px rgba(0,0,0,0.36)", "purpose": "Dialogs, menus and drawers only." }
+    ],
+    "motion": [
+      { "name": "state", "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Feedback and state transitions." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "640px" },
+      { "name": "tablet", "value": "960px" }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "Mesa de Operacao Dark Trials Arena",
+    "overview": "Interface escura e densa, inspirada no simbolo DTA em preto, grafite, vermelho e marfim, para staff trabalhando durante partidas ao vivo.",
+    "keyCharacteristics": ["Sidebar operacional", "Tabelas para comparacao", "Detalhes em drawer", "Movimento comunica estado"],
+    "rules": [
+      { "name": "Restraint", "body": "Cor saturada nunca domina superficies inativas.", "section": "colors" },
+      { "name": "Flat-by-Default", "body": "Secoes de pagina nunca flutuam como cards decorativos.", "section": "elevation" }
+    ],
+    "dos": ["Mostrar operacao ao vivo primeiro.", "Usar controles familiares e estados completos."],
+    "donts": ["Nao usar cards numericos como estrutura principal.", "Nao usar gradientes, neon decorativo ou glassmorphism."]
+  }
+}

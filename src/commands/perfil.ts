@@ -2,8 +2,8 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
 } from 'discord.js';
-import prisma from '../database/client';
 import { createPerfilEmbed, createErrorEmbed } from '../utils/embeds';
+import { playerService } from '../services/player-service';
 
 export const data = new SlashCommandBuilder()
   .setName('perfil')
@@ -14,24 +14,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const userId = interaction.user.id;
   const guildId = interaction.guildId!;
 
-  let jogador = await prisma.jogador.findUnique({
-    where: {
-      id_guildId: {
-        id: userId,
-        guildId,
-      },
-    },
-  });
-
-  if (!jogador) {
-    jogador = await prisma.jogador.create({
-      data: {
-        id: userId,
-        guildId,
-        nome: interaction.user.displayName,
-      },
-    });
-  }
+  const jogador = await playerService.getOrCreate(
+    userId,
+    guildId,
+    interaction.user.displayName,
+  );
 
   const embed = createPerfilEmbed(
     interaction.user.displayName,
@@ -42,6 +29,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true,
+    flags: 64,
   });
 }

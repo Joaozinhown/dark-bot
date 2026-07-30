@@ -1,16 +1,20 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
   GuildMember,
   Role,
 } from 'discord.js';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
+import {
+  addMemberToTeamRole,
+  deleteTeamRole,
+  removeMemberFromTeamRole,
+  renameTeamRole,
+} from '../services/role-service';
 
 export const data = new SlashCommandBuilder()
   .setName('gerenciar-cargo')
   .setDescription('Gerencia cargos de time existentes')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addSubcommand(subcommand =>
     subcommand
@@ -98,22 +102,22 @@ async function handleRenomear(interaction: ChatInputCommandInteraction) {
   const cargo = interaction.options.getRole('cargo', true) as Role;
   const novoNome = interaction.options.getString('novo-nome', true);
 
-  await cargo.setName(novoNome);
+  await renameTeamRole(cargo, novoNome);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo renomeado para **${novoNome}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
 async function handleDeletar(interaction: ChatInputCommandInteraction) {
   const cargo = interaction.options.getRole('cargo', true) as Role;
 
-  await cargo.delete('Deletado por organizador');
+  await deleteTeamRole(cargo);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo **${cargo.name}** deletado.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -124,16 +128,16 @@ async function handleMembroAdicionar(interaction: ChatInputCommandInteraction) {
   if (!membro || !(membro instanceof GuildMember)) {
     await interaction.reply({
       embeds: [createErrorEmbed('Membro invalido.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
 
-  await membro.roles.add(cargo.id);
+  await addMemberToTeamRole(membro.roles, cargo.id);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Membro adicionado ao cargo **${cargo.name}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }
 
@@ -144,15 +148,15 @@ async function handleMembroRemover(interaction: ChatInputCommandInteraction) {
   if (!membro || !(membro instanceof GuildMember)) {
     await interaction.reply({
       embeds: [createErrorEmbed('Membro invalido.')],
-      ephemeral: true,
+      flags: 64,
     });
     return;
   }
 
-  await membro.roles.remove(cargo.id);
+  await removeMemberFromTeamRole(membro.roles, cargo.id);
 
   await interaction.reply({
     embeds: [createSuccessEmbed(`Membro removido do cargo **${cargo.name}**.`)],
-    ephemeral: true,
+    flags: 64,
   });
 }

@@ -1,17 +1,18 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
 } from 'discord.js';
-import prisma from '../database/client';
-import { getVitoriasNecessarias, PoolFormato } from '../config';
+import { PoolFormato } from '../config';
 import { createResultadoEmbed, createErrorEmbed } from '../utils/embeds';
 import { ConfrontoData, VencedorTime } from '../types/index';
+import {
+  confrontationService,
+  ConfrontationServiceError,
+} from '../services/confrontation-service';
 
 export const data = new SlashCommandBuilder()
   .setName('resultado')
   .setDescription('Registra o vencedor do confronto')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addIntegerOption(option =>
     option
@@ -30,50 +31,27 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const confrontoId = interaction.options.getInteger('confronto-id', true);
   const vencedor = interaction.options.getRole('vencedor', true);
 
-  const confronto = await prisma.confronto.findUnique({
-    where: { id: confrontoId },
-  });
-
-  if (!confronto) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Confronto nao encontrado.')],
-      ephemeral: true,
-    });
+  let result;
+  try {
+    result = await confrontationService.recordResult(
+      confrontoId,
+      vencedor.id,
+      interaction.guildId!,
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof ConfrontationServiceError)) throw error;
+    await interaction.reply({ embeds: [createErrorEmbed(error.message)], flags: 64 });
     return;
   }
 
-  if (confronto.status === 'encerrado') {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Este confronto ja foi encerrado.')],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (vencedor.id !== confronto.timeARoleId && vencedor.id !== confronto.timeBRoleId) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('O time vencedor deve ser um dos participantes.')],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const vencedorTime: VencedorTime = vencedor.id === confronto.timeARoleId ? 'A' : 'B';
-
-  await prisma.confronto.update({
-    where: { id: confrontoId },
-    data: {
-      vencedor: vencedorTime,
-      timeAVitorias: vencedorTime === 'A' ? confronto.timeAVitorias + 1 : confronto.timeAVitorias,
-      timeBVitorias: vencedorTime === 'B' ? confronto.timeBVitorias + 1 : confronto.timeBVitorias,
-      status: 'resultado',
-    },
-  });
+  const confronto = result.previous;
+  const vencedorTime: VencedorTime = result.winner;
 
   const confrontoData: ConfrontoData = {
     ...confronto,
     vencedor: vencedorTime,
     formato: confronto.formato as PoolFormato,
+    primeiroKiller: confronto.primeiroKiller as 'A' | 'B' | null,
   };
 
   const embed = createResultadoEmbed(confrontoData, vencedor.name);
@@ -87,6 +65,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true,
+    flags: 64,
   });
 }

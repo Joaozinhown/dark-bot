@@ -1,16 +1,16 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  PermissionFlagsBits,
-  Colors,
 } from 'discord.js';
-import { parseHexColor } from '../utils/permissions';
 import { createSuccessEmbed, createErrorEmbed } from '../utils/embeds';
+import {
+  createTeamRole,
+  parseTeamRoleColor,
+} from '../services/role-service';
 
 export const data = new SlashCommandBuilder()
   .setName('setup-cargo')
   .setDescription('Configura um cargo de time para o evento')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addStringOption(option =>
     option
@@ -29,26 +29,22 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const nomeTime = interaction.options.getString('nome-time', true);
   const corHex = interaction.options.getString('cor');
 
-  let color: number | typeof Colors.Default = Colors.Default;
+  const color = parseTeamRoleColor(corHex);
 
-  if (corHex) {
-    const parsed = parseHexColor(corHex);
-    if (parsed === null) {
-      await interaction.reply({
-        embeds: [createErrorEmbed('Cor hex invalida. Use o formato #RRGGBB.')],
-        ephemeral: true,
-      });
-      return;
-    }
-    color = parsed;
+  if (color === null) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Cor hex invalida. Use o formato #RRGGBB.')],
+      flags: 64,
+    });
+    return;
   }
 
   await interaction.deferReply();
 
-  const cargo = await interaction.guild!.roles.create({
+  const cargo = await createTeamRole(interaction.guild!.roles, {
     name: nomeTime,
     color,
-    reason: `Cargo de time criado por ${interaction.user.displayName}`,
+    createdBy: interaction.user.displayName,
   });
 
   const embed = createSuccessEmbed(

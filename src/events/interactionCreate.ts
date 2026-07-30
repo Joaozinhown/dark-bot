@@ -1,15 +1,15 @@
 import { Events, Interaction } from 'discord.js';
-import { handleBanButton } from '../systems/veto';
+import { handleBanSelection } from '../systems/veto';
 
 export const name = Events.InteractionCreate;
 export const once = false;
 
-export function execute(interaction: Interaction) {
-  if (interaction.isButton()) {
-    const [action, confrontoId, tipo] = interaction.customId.split(':');
+export async function execute(interaction: Interaction) {
+  if (interaction.isStringSelectMenu()) {
+    const [action, confrontoId] = interaction.customId.split(':');
 
-    if (action === 'ban') {
-      handleBanButton(interaction, Number(confrontoId), tipo);
+    if (action === 'killer-ban') {
+      await handleBanSelection(interaction, Number(confrontoId));
     }
   }
 }

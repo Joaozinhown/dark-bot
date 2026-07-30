@@ -1,104 +1,14 @@
 import { PrismaClient } from '@prisma/client';
+import { POOL_PRESETS } from './data/pool-presets';
 
 const prisma = new PrismaClient();
 
 const GUILD_ID = '1397269781924548678';
 
-const pools = [
-  {
-    nome: 'Queens Trials 1',
-    formato: 'MD3',
-    mapas: [
-      "Azarov's Resting Place",
-      'Shelter Woods',
-      'Ormond Lake Mine',
-    ],
-    killers: [
-      'Oni',
-      'Nurse',
-      'Spirit',
-      'Krasue',
-      'Artist',
-      'Ghoul',
-      'Lich',
-      'Plague',
-      'Singularity',
-    ],
-  },
-  {
-    nome: 'Queens Trials 2',
-    formato: 'MD3',
-    mapas: [
-      'Groaning Storehouse',
-      "Wrecker's Yard",
-      'Residencia da Familia (Yamaoka)',
-    ],
-    killers: [
-      'The Slasher',
-      'Animatronic',
-      'Mastermind',
-      'Deathslinger',
-      'Nightmare',
-      'The Executioner',
-      'Unknown',
-      'Nemesis',
-      'Houndmaster',
-    ],
-  },
-  {
-    nome: 'Queens Trials 3',
-    formato: 'MD5',
-    mapas: [
-      'Wretched Shop',
-      'Midwich Elementary School',
-      'Suffocation Pit',
-      'Ironworks of Misery',
-      "Thompson's House",
-    ],
-    killers: [
-      'Demogorgon',
-      'Dredge',
-      'Onryo',
-      'The First',
-      'Wraith',
-      'Hillbilly',
-      'Blight',
-      'Spirit',
-      'Pig',
-      'Knight',
-      'Legion',
-    ],
-  },
-  {
-    nome: 'Queens Trials 4',
-    formato: 'MD5',
-    mapas: [
-      'Dead Dawg Saloon',
-      'Coal Tower',
-      "Lery's Memorial Institute",
-      'Blood Lodge',
-      'Toba Landing',
-    ],
-    killers: [
-      'Clown',
-      'Good Guy',
-      'Cenobite',
-      'Ghost Face',
-      'Shape',
-      'Lich',
-      'Wraith',
-      'Dark Lord',
-      'Doctor',
-      'Krasue',
-      'The Slasher',
-    ],
-  },
-];
-
 async function seed() {
   console.log('Inserindo pools iniciais...');
 
-  for (const poolData of pools) {
+  for (const poolData of POOL_PRESETS) {
     const pool = await prisma.pool.create({
       data: {
         guildId: GUILD_ID,

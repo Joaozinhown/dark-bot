@@ -31,6 +31,7 @@ export interface ConfrontoData {
   vozTimeAId: string | null;
   vozTimeBId: string | null;
   vencedor: VencedorTime | null;
+  primeiroKiller: VetoVez | null;
   encerradoEm: Date | null;
   motivoEncerramento: string | null;
   criadoEm: Date;
