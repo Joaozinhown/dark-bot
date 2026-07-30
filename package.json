@@ -7,7 +7,7 @@
     "dev": "node scripts/migrate.js && tsx watch src/index.ts",
     "build": "prisma generate && npm run build:ts",
     "build:ts": "tsc",
-    "test": "npm run build:ts && node --test build/systems/veto-rules.test.js build/tests/commands-contract.test.js build/tests/migration-integration.test.js build/services/audit-service.test.js build/services/role-service.test.js build/services/pool-service.test.js build/services/preset-service.test.js build/services/confrontation-service.test.js build/services/player-service.test.js build/services/report-service.test.js build/services/guild-permission-service.test.js",
+    "test": "npm run build:ts && node --test build/systems/veto-rules.test.js build/tests/commands-contract.test.js build/tests/migration-integration.test.js build/services/audit-service.test.js build/services/role-service.test.js build/services/pool-service.test.js build/services/preset-service.test.js build/services/confrontation-service.test.js build/services/player-service.test.js build/services/report-service.test.js build/services/guild-permission-service.test.js build/web/config.test.js build/web/auth/crypto.test.js build/web/auth/discord-oauth.test.js build/web/auth/session-service.test.js build/web/authorization/guild-access.test.js build/web/realtime/event-bus.test.js build/web/server.test.js",
     "start": "node scripts/start.js",
     "start:bot-hosting": "npm start",
     "deploy:discloud": "discloud app up",
@@ -19,12 +19,17 @@
     "db:migrate": "prisma migrate dev"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/helmet": "^13.1.0",
+    "@fastify/rate-limit": "^11.1.0",
     "@prisma/client": "^6.10.0",
     "@types/node": "^22.10.0",
     "discord.js": "^14.27.0",
     "dotenv": "^16.4.0",
+    "fastify": "^5.10.0",
     "prisma": "^6.10.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

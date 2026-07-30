@@ -20,16 +20,22 @@ import {
 } from './startup';
 import { createErrorEmbed } from './utils/embeds';
 import { hasBotAdminPermission } from './utils/permissions';
+import { createDiscordOAuthClient } from './web/auth/discord-oauth';
+import { createSessionService } from './web/auth/session-service';
+import { readPanelConfig, type EnabledPanelConfig } from './web/config';
+import { createPanelRuntime } from './web/runtime';
+import { createWebApp } from './web/server';
+import { guildEventBus } from './web/realtime/event-bus';
 
 dotenv.config();
 
 interface ClientCommands {
-  commands: Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>;
+  commands: Collection<string, CommandModule>;
 }
 
 interface CommandModule {
   data?: {
-    toJSON: () => unknown;
+    toJSON: () => { name?: string; description?: string };
   };
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
@@ -41,7 +47,7 @@ const client = new Client({
   ],
 }) as Client & ClientCommands;
 
-client.commands = new Collection<string, { execute: (interaction: ChatInputCommandInteraction) => Promise<void> }>();
+client.commands = new Collection<string, CommandModule>();
 
 const ADMIN_COMMANDS = new Set([
   'criar-confronto',
@@ -67,6 +73,26 @@ function startHealthServer() {
   });
 
   return server;
+}
+
+async function startAdminPanel(config: EnabledPanelConfig) {
+  const oauth = createDiscordOAuthClient({
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    redirectUri: config.redirectUri,
+  });
+  const sessions = createSessionService({
+    encryptionKey: config.encryptionKey.toString('base64'),
+  });
+  const app = await createWebApp({
+    config,
+    oauth,
+    sessions,
+    runtime: createPanelRuntime(client),
+  });
+  await app.listen({ port: config.port, host: '0.0.0.0' });
+  console.log(`[Dark Bot] Painel administrativo rodando na porta ${config.port}`);
+  return app;
 }
 
 function loadEvents() {
@@ -177,6 +203,11 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     await command.execute(interaction);
+    if (interaction.guildId) {
+      guildEventBus.publish(interaction.guildId, 'command.executed', {
+        commandName: interaction.commandName,
+      });
+    }
   } catch (error) {
     console.error(`[Commands] Erro ao executar ${interaction.commandName}:`, error);
 
@@ -200,6 +231,7 @@ client.on(Events.GuildCreate, async guild => {
   try {
     await syncPresetPoolsForGuild(guild.id);
     await syncGuildCommands(token, guild, commandPayloads);
+    guildEventBus.publish(guild.id, 'guild.connected', { guildId: guild.id });
   } catch (error) {
     console.error(`[Startup] Erro ao sincronizar comandos no servidor ${guild.id}:`, error);
   }
@@ -208,7 +240,15 @@ client.on(Events.GuildCreate, async guild => {
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
-  if (process.env.ENABLE_HTTP_SERVER === 'true' || process.env.PORT) {
+  let panelConfig = { enabled: false } as ReturnType<typeof readPanelConfig>;
+  try {
+    panelConfig = readPanelConfig();
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Dark Bot] Painel desabilitado por configuracao invalida: ${message}`);
+  }
+
+  if (!panelConfig.enabled && (process.env.ENABLE_HTTP_SERVER === 'true' || process.env.PORT)) {
     startHealthServer();
   }
 
@@ -228,7 +268,20 @@ async function main() {
 
   await ensureDatabase();
 
+  if (panelConfig.enabled) {
+    try {
+      await startAdminPanel(panelConfig);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[Dark Bot] Painel indisponivel; bot continuara iniciando: ${message}`);
+    }
+  }
+
   await connectDiscordWithRetry(token);
+
+  for (const guildId of client.guilds.cache.keys()) {
+    guildEventBus.publish(guildId, 'bot.ready', { guildId });
+  }
 
   await seedPools(Array.from(client.guilds.cache.keys()));
 
@@ -236,7 +289,7 @@ async function main() {
   client.commands = await deployCommandsAuto(token, client);
   commandPayloads = Array.from(client.commands.values())
     .map((command: CommandModule) => command.data?.toJSON())
-    .filter((payload): payload is unknown => Boolean(payload));
+    .filter((payload): payload is { name?: string; description?: string } => Boolean(payload));
 }
 
 main().catch(error => {
