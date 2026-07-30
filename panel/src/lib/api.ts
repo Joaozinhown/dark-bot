@@ -4,6 +4,8 @@ import {
   mockGuilds,
   mockHealth,
   mockOverview,
+  mockPoolDetails,
+  mockManagement,
   mockPools,
   mockRanking,
   mockRecentConfrontations,
@@ -18,10 +20,13 @@ import type {
   Guild,
   Health,
   Overview,
+  PanelAction,
   Pool,
+  PoolDetail,
   RankingEntry,
   Session,
   Team,
+  ManagementData,
 } from '../types/api';
 
 export const isMockMode = import.meta.env.DEV && import.meta.env.VITE_PANEL_MOCK === 'true';
@@ -122,6 +127,27 @@ export const panelApi = {
 
   commands(guildId: string): Promise<Command[]> {
     return isMockMode ? mockDelay(mockCommands) : request(`/api/guilds/${guildId}/commands`);
+  },
+
+  poolDetails(guildId: string): Promise<PoolDetail[]> {
+    return isMockMode ? mockDelay(mockPoolDetails) : request(`/api/guilds/${guildId}/pool-details`);
+  },
+
+  management(guildId: string): Promise<ManagementData> {
+    return isMockMode ? mockDelay(mockManagement) : request(`/api/guilds/${guildId}/management`);
+  },
+
+  action(guildId: string, action: PanelAction): Promise<unknown> {
+    if (isMockMode) return mockDelay(action);
+    const csrfToken = readCookie('dta_csrf');
+    return request(`/api/guilds/${guildId}/actions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+      },
+      body: JSON.stringify(action),
+    });
   },
 
   ranking(guildId: string): Promise<RankingEntry[]> {

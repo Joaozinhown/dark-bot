@@ -16,13 +16,19 @@ import { createOpaqueToken, hashOpaqueToken, verifyOpaqueToken } from './auth/cr
 import { DiscordOAuthError, type DiscordOAuthGuild as OAuthGuild } from './auth/discord-oauth';
 import type { EnabledPanelConfig } from './config';
 import { guildEventBus, type GuildEventBus } from './realtime/event-bus';
+import { createConnectionLimiter } from './realtime/connection-limiter';
 import type { PanelRuntime } from './runtime';
+import { panelActionSchema, PanelActionError } from './panel-actions';
 
 const SESSION_COOKIE = 'dta_session';
 const CSRF_COOKIE = 'dta_csrf';
 const STATE_COOKIE = 'dta_oauth_state';
 const STATE_TTL_SECONDS = 10 * 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+const MAX_SSE_CONNECTIONS_PER_SESSION_GUILD = 3;
+const MAX_SSE_CONNECTIONS_TOTAL = 100;
+const REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
+const OAUTH_GUILD_CACHE_TTL_MS = 30_000;
 
 export interface OAuthClientContract {
   getAuthorizationUrl(state: string): string;
@@ -79,11 +85,17 @@ export interface WebAppOptions {
   sessions: SessionServiceContract;
   runtime: PanelRuntime;
   eventBus?: GuildEventBus;
+  panelRoot?: string;
 }
 
 interface AuthenticatedRequest {
   token: string;
   session: PublicSession;
+}
+
+interface OAuthGuildCacheEntry {
+  readonly guilds: OAuthGuild[];
+  readonly expiresAt: number;
 }
 
 function sendError(reply: FastifyReply, statusCode: number, code: string, message: string) {
@@ -94,8 +106,21 @@ function sendData(reply: FastifyReply, data: unknown) {
   return reply.send({ success: true, data, error: null });
 }
 
+function isSpaNavigation(request: FastifyRequest): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  const pathname = new URL(request.url, 'http://localhost').pathname;
+  const isReserved = pathname === '/api'
+    || pathname.startsWith('/api/')
+    || pathname === '/health'
+    || pathname.startsWith('/health/')
+    || pathname.startsWith('/assets/');
+  if (isReserved || path.extname(pathname)) return false;
+  return request.headers.accept?.split(',').some(value => value.trim().startsWith('text/html')) ?? false;
+}
+
 export async function createWebApp(options: WebAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
+    bodyLimit: REQUEST_BODY_LIMIT_BYTES,
     trustProxy: options.config.isProduction ? 1 : false,
     logController: new LogController({
       disableRequestLogging: () => true,
@@ -106,7 +131,14 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     },
   });
   const eventBus = options.eventBus ?? guildEventBus;
-  const refreshOperations = new Map<string, Promise<OAuthGuild[] | null>>();
+  const oauthGuildCache = new Map<string, OAuthGuildCacheEntry>();
+  const oauthGuildLoads = new Map<string, Promise<OAuthGuild[] | null>>();
+  const streamLimiter = createConnectionLimiter({
+    maxPerKey: MAX_SSE_CONNECTIONS_PER_SESSION_GUILD,
+    maxTotal: MAX_SSE_CONNECTIONS_TOTAL,
+  });
+  const streamsBySession = new Map<string, Set<() => void>>();
+  const streamsByGuild = new Map<string, Set<() => void>>();
   const secureCookies = options.config.isProduction;
   const sessionCookieOptions = {
     path: '/',
@@ -134,6 +166,25 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     max: 120,
     timeWindow: '1 minute',
     keyGenerator: request => request.ip,
+  });
+
+  app.setErrorHandler((error, _request, reply) => {
+    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
+      ? Number(error.statusCode)
+      : 500;
+    if (error instanceof PanelActionError) {
+      return sendError(reply, error.statusCode, error.code, error.message);
+    }
+    if (statusCode === 429) {
+      return sendError(reply, 429, 'RATE_LIMITED', 'Muitas requisicoes. Tente novamente.');
+    }
+    if (statusCode >= 400 && statusCode < 500) {
+      const code = statusCode === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST';
+      const message = statusCode === 413 ? 'Requisicao muito grande.' : 'Requisicao invalida.';
+      return sendError(reply, statusCode, code, message);
+    }
+    app.log.error({ err: error }, 'Web request failed');
+    return sendError(reply, 500, 'INTERNAL_ERROR', 'Erro interno.');
   });
 
   function readSignedCookie(request: FastifyRequest, name: string): string | null {
@@ -180,38 +231,57 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     return true;
   }
 
-  async function loadOAuthGuilds(auth: AuthenticatedRequest): Promise<OAuthGuild[] | null> {
+  async function fetchOAuthGuilds(auth: AuthenticatedRequest): Promise<OAuthGuild[] | null> {
     const tokens = await options.sessions.readOAuthTokens(auth.token);
     if (!tokens) return null;
     try {
       return await options.oauth.getCurrentUserGuilds(tokens.accessToken);
     } catch (error: unknown) {
       if (!(error instanceof DiscordOAuthError) || error.status !== 401 || !tokens.refreshToken) throw error;
-      const pending = refreshOperations.get(auth.token);
-      if (pending) return pending;
-
-      const operation = (async () => {
-        const latestTokens = await options.sessions.readOAuthTokens(auth.token);
-        if (!latestTokens) return null;
-        if (latestTokens.accessToken !== tokens.accessToken) {
-          return options.oauth.getCurrentUserGuilds(latestTokens.accessToken);
-        }
-        if (!latestTokens.refreshToken) return null;
-
-        const refreshed = await options.oauth.refresh(latestTokens.refreshToken);
-        const replaced = await options.sessions.replaceOAuthTokens(auth.token, {
-          accessToken: refreshed.accessToken,
-          refreshToken: refreshed.refreshToken,
-        });
-        if (!replaced) return null;
-        return options.oauth.getCurrentUserGuilds(refreshed.accessToken);
-      })();
-      refreshOperations.set(auth.token, operation);
-      try {
-        return await operation;
-      } finally {
-        refreshOperations.delete(auth.token);
+      const latestTokens = await options.sessions.readOAuthTokens(auth.token);
+      if (!latestTokens) return null;
+      if (latestTokens.accessToken !== tokens.accessToken) {
+        return options.oauth.getCurrentUserGuilds(latestTokens.accessToken);
       }
+      if (!latestTokens.refreshToken) return null;
+
+      const refreshed = await options.oauth.refresh(latestTokens.refreshToken);
+      const replaced = await options.sessions.replaceOAuthTokens(auth.token, {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+      });
+      if (!replaced) return null;
+      return options.oauth.getCurrentUserGuilds(refreshed.accessToken);
+    }
+  }
+
+  async function loadOAuthGuilds(auth: AuthenticatedRequest): Promise<OAuthGuild[] | null> {
+    const cacheKey = hashOpaqueToken(auth.token);
+    const now = Date.now();
+    for (const [key, entry] of oauthGuildCache) {
+      if (entry.expiresAt <= now) oauthGuildCache.delete(key);
+    }
+    const cached = oauthGuildCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.guilds;
+
+    const pending = oauthGuildLoads.get(cacheKey);
+    if (pending) return pending;
+
+    const operation = fetchOAuthGuilds(auth).then(async guilds => {
+      const isSessionActive = Boolean(await options.sessions.readOAuthTokens(auth.token));
+      if (guilds && isSessionActive) {
+        oauthGuildCache.set(cacheKey, {
+          guilds,
+          expiresAt: Date.now() + OAUTH_GUILD_CACHE_TTL_MS,
+        });
+      }
+      return guilds;
+    });
+    oauthGuildLoads.set(cacheKey, operation);
+    try {
+      return await operation;
+    } finally {
+      oauthGuildLoads.delete(cacheKey);
     }
   }
 
@@ -227,21 +297,42 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
   async function requireGuild(
     request: FastifyRequest<{ Params: { guildId: string } }>,
     reply: FastifyReply,
-  ): Promise<{ auth: AuthenticatedRequest; guild: AuthorizedGuild } | null> {
+  ): Promise<{ auth: AuthenticatedRequest; guildId: string } | null> {
     const auth = await requireSession(request, reply);
     if (!auth) return null;
-    const guild = (await listAuthorizedGuilds(auth)).find(item => item.id === request.params.guildId);
-    if (!guild) {
+    const guildId = request.params.guildId;
+    if (!(await options.runtime.hasGuildAccess(auth.session.userId, guildId))) {
       sendError(reply, 403, 'GUILD_FORBIDDEN', 'Acesso ao servidor negado.');
       return null;
     }
-    return { auth, guild };
+    return { auth, guildId };
+  }
+
+  function registerStream(
+    registry: Map<string, Set<() => void>>,
+    key: string,
+    close: () => void,
+  ): () => void {
+    const streams = registry.get(key) ?? new Set<() => void>();
+    streams.add(close);
+    registry.set(key, streams);
+    return () => {
+      const current = registry.get(key);
+      if (!current) return;
+      current.delete(close);
+      if (current.size === 0) registry.delete(key);
+    };
+  }
+
+  function closeRegisteredStreams(registry: Map<string, Set<() => void>>, key: string): void {
+    for (const close of [...(registry.get(key) ?? [])]) close();
   }
 
   app.get('/health', { config: { rateLimit: false } }, async (_request, reply) => sendData(reply, {
     status: options.runtime.isReady() ? 'ready' : 'starting',
     botReady: options.runtime.isReady(),
     guildCount: options.runtime.getGuildCount(),
+    commandCount: options.runtime.getCommandCount?.() ?? 0,
     uptimeSeconds: Math.floor(process.uptime()),
   }));
 
@@ -271,6 +362,14 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
 
     const tokens = await options.oauth.exchangeCode(parsed.data.code);
     const user = await options.oauth.getCurrentUser(tokens.accessToken);
+    const oauthGuilds = await options.oauth.getCurrentUserGuilds(tokens.accessToken);
+    const authorizedGuilds = await options.runtime.listAuthorizedGuilds(
+      user.id,
+      oauthGuilds as DiscordOAuthGuild[],
+    );
+    if (authorizedGuilds.length === 0) {
+      return sendError(reply, 403, 'NO_AUTHORIZED_GUILDS', 'Nenhum servidor autorizado encontrado.');
+    }
     const created = await options.sessions.create({
       userId: user.id,
       username: user.username,
@@ -299,6 +398,9 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     const auth = await requireSession(request, reply);
     if (!auth || !(await requireCsrf(request, reply, auth))) return reply;
     await options.sessions.revoke(auth.token);
+    const sessionKey = hashOpaqueToken(auth.token);
+    oauthGuildCache.delete(sessionKey);
+    closeRegisteredStreams(streamsBySession, sessionKey);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     reply.clearCookie(CSRF_COOKIE, { path: '/' });
     return reply.code(204).send();
@@ -315,21 +417,49 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     ['pools', guildId => options.runtime.getPools(guildId)],
     ['ranking', guildId => options.runtime.getRanking(guildId)],
     ['teams', guildId => options.runtime.getTeams(guildId)],
-    ['commands', () => options.runtime.getCommands()],
+    ['commands', guildId => options.runtime.getCommands(guildId)],
     ['audit', guildId => options.runtime.getAudit(guildId)],
+    ['pool-details', guildId => options.runtime.getPoolDetails(guildId)],
+    ['management', guildId => options.runtime.getManagement(guildId)],
   ];
   for (const [resource, load] of guildReads) {
     app.get<{ Params: { guildId: string } }>(`/api/guilds/:guildId/${resource}`, async (request, reply) => {
       const access = await requireGuild(request, reply);
-      return access ? sendData(reply, await load(access.guild.id)) : reply;
+      return access ? sendData(reply, await load(access.guildId)) : reply;
     });
   }
+
+  app.post<{ Params: { guildId: string }; Body: unknown }>('/api/guilds/:guildId/actions', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const access = await requireGuild(request, reply);
+    if (!access || !(await requireCsrf(request, reply, access.auth))) return reply;
+    const parsed = panelActionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Dados da acao invalidos.');
+    }
+    const result = await options.runtime.executeAction(
+      access.guildId,
+      access.auth.session.userId,
+      parsed.data,
+    );
+    if (parsed.data.type === 'permission.set-admin-roles') {
+      closeRegisteredStreams(streamsByGuild, access.guildId);
+    }
+    return sendData(reply, result);
+  });
 
   app.get<{ Params: { guildId: string } }>('/api/guilds/:guildId/events', async (request, reply) => {
     const access = await requireGuild(request, reply);
     if (!access) return reply;
     const streamAuth = access.auth;
-    const streamGuildId = access.guild.id;
+    const streamGuildId = access.guildId;
+    const streamSessionId = hashOpaqueToken(streamAuth.token);
+    const acquiredConnection = streamLimiter.acquire(`${streamSessionId}:${streamGuildId}`);
+    if (!acquiredConnection) {
+      return sendError(reply, 429, 'SSE_LIMIT_REACHED', 'Limite de conexoes em tempo real atingido.');
+    }
+    const releaseConnection: () => void = acquiredConnection;
 
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -345,36 +475,48 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       }
     });
     let isClosed = false;
+    let heartbeat: NodeJS.Timeout | undefined;
     let authorizationTimer: NodeJS.Timeout | undefined;
+    let unregisterSession = () => {};
+    let unregisterGuild = () => {};
     function closeStream() {
       if (isClosed) return;
       isClosed = true;
-      clearInterval(heartbeat);
+      if (heartbeat) clearInterval(heartbeat);
       if (authorizationTimer) clearTimeout(authorizationTimer);
       unsubscribe();
+      unregisterSession();
+      unregisterGuild();
+      releaseConnection();
       reply.raw.end();
     }
     async function revalidateAuthorization() {
       try {
         const currentSession = await options.sessions.resolve(streamAuth.token);
         if (!currentSession) return closeStream();
-        const guilds = await listAuthorizedGuilds({ token: streamAuth.token, session: currentSession });
-        if (!guilds.some(guild => guild.id === streamGuildId)) return closeStream();
+        const hasAccess = await options.runtime.hasGuildAccess(
+          currentSession.userId,
+          streamGuildId,
+        );
+        if (!hasAccess) return closeStream();
       } catch {
         return closeStream();
       }
       if (!isClosed) authorizationTimer = setTimeout(revalidateAuthorization, 60_000);
     }
-    const heartbeat = setInterval(() => {
+    heartbeat = setInterval(() => {
       if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n');
     }, 20_000);
+    unregisterSession = registerStream(streamsBySession, streamSessionId, closeStream);
+    unregisterGuild = registerStream(streamsByGuild, streamGuildId, closeStream);
     authorizationTimer = setTimeout(revalidateAuthorization, 60_000);
     request.raw.on('close', closeStream);
     return reply;
   });
 
-  const panelRoot = path.resolve(process.cwd(), 'panel', 'dist');
-  if (existsSync(path.join(panelRoot, 'index.html'))) {
+  const panelRoot = options.panelRoot ?? path.resolve(process.cwd(), 'panel', 'dist');
+  const hasFrontendBuild = existsSync(path.join(panelRoot, 'index.html'));
+  if (hasFrontendBuild) {
     await app.register(fastifyStatic, {
       root: panelRoot,
       wildcard: false,
@@ -386,23 +528,13 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
         }
       },
     });
-    app.setNotFoundHandler((request, reply) => {
-      if (request.url.startsWith('/api/') || request.url === '/health') {
-        return sendError(reply, 404, 'NOT_FOUND', 'Recurso nao encontrado.');
-      }
-      return reply.sendFile('index.html', { maxAge: 0, immutable: false });
-    });
   }
 
-  app.setErrorHandler((error, _request, reply) => {
-    app.log.error({ err: error }, 'Web request failed');
-    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
-      ? Number(error.statusCode)
-      : 500;
-    if (statusCode === 429) {
-      return sendError(reply, 429, 'RATE_LIMITED', 'Muitas requisicoes. Tente novamente.');
+  app.setNotFoundHandler((request, reply) => {
+    if (hasFrontendBuild && isSpaNavigation(request)) {
+      return reply.sendFile('index.html', { maxAge: 0, immutable: false });
     }
-    return sendError(reply, 500, 'INTERNAL_ERROR', 'Erro interno.');
+    return sendError(reply, 404, 'NOT_FOUND', 'Recurso nao encontrado.');
   });
 
   return app;

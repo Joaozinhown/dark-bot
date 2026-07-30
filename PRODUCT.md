@@ -16,7 +16,7 @@ Sucesso significa executar no painel as mesmas regras do bot, acompanhar confron
 
 ## Brand Personality
 
-Sombria, competitiva e operacional. A identidade Queens Trials deve ser reconhecivel, mas a interface precisa permanecer silenciosa durante trabalho repetitivo da staff.
+Sombria, competitiva e operacional. A identidade Dark Trials Arena deve ser reconhecivel pelo simbolo DTA, mas a interface precisa permanecer silenciosa durante trabalho repetitivo da staff.
 
 ## Anti-references
 

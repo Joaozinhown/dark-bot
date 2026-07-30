@@ -20,12 +20,17 @@ import {
 } from './startup';
 import { createErrorEmbed } from './utils/embeds';
 import { hasBotAdminPermission } from './utils/permissions';
+import {
+  createCommandSettingService,
+  prismaCommandSettingStore,
+} from './services/command-setting-service';
 import { createDiscordOAuthClient } from './web/auth/discord-oauth';
 import { createSessionService } from './web/auth/session-service';
 import { readPanelConfig, type EnabledPanelConfig } from './web/config';
 import { createPanelRuntime } from './web/runtime';
 import { createWebApp } from './web/server';
 import { guildEventBus } from './web/realtime/event-bus';
+import { readPanelConfigSafely, runPanelBeforeBot } from './web/startup';
 
 dotenv.config();
 
@@ -189,6 +194,20 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   try {
+    if (interaction.guildId) {
+      const commandSettings = createCommandSettingService(
+        prismaCommandSettingStore,
+        [...client.commands.keys()],
+      );
+      if (!(await commandSettings.isEnabled(interaction.guildId, interaction.commandName))) {
+        await interaction.reply({
+          embeds: [createErrorEmbed('Este comando esta desativado neste servidor.')],
+          flags: 64,
+        });
+        return;
+      }
+    }
+
     if (ADMIN_COMMANDS.has(interaction.commandName)) {
       const member = interaction.member instanceof GuildMember ? interaction.member : null;
       const canUseCommand = member ? await hasBotAdminPermission(member) : false;
@@ -240,13 +259,13 @@ client.on(Events.GuildCreate, async guild => {
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
-  let panelConfig = { enabled: false } as ReturnType<typeof readPanelConfig>;
-  try {
-    panelConfig = readPanelConfig();
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[Dark Bot] Painel desabilitado por configuracao invalida: ${message}`);
-  }
+  const panelConfig = readPanelConfigSafely({
+    readConfig: readPanelConfig,
+    reportConfigError(error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[Dark Bot] Painel desabilitado por configuracao invalida: ${message}`);
+    },
+  });
 
   if (!panelConfig.enabled && (process.env.ENABLE_HTTP_SERVER === 'true' || process.env.PORT)) {
     startHealthServer();
@@ -268,28 +287,29 @@ async function main() {
 
   await ensureDatabase();
 
-  if (panelConfig.enabled) {
-    try {
-      await startAdminPanel(panelConfig);
-    } catch (error: unknown) {
+  await runPanelBeforeBot({
+    config: panelConfig,
+    startPanel: startAdminPanel,
+    reportPanelError(error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[Dark Bot] Painel indisponivel; bot continuara iniciando: ${message}`);
-    }
-  }
+    },
+    async startBot() {
+      await connectDiscordWithRetry(token);
 
-  await connectDiscordWithRetry(token);
+      for (const guildId of client.guilds.cache.keys()) {
+        guildEventBus.publish(guildId, 'bot.ready', { guildId });
+      }
 
-  for (const guildId of client.guilds.cache.keys()) {
-    guildEventBus.publish(guildId, 'bot.ready', { guildId });
-  }
+      await seedPools(Array.from(client.guilds.cache.keys()));
 
-  await seedPools(Array.from(client.guilds.cache.keys()));
-
-  // Registra comandos apos login (pode demorar)
-  client.commands = await deployCommandsAuto(token, client);
-  commandPayloads = Array.from(client.commands.values())
-    .map((command: CommandModule) => command.data?.toJSON())
-    .filter((payload): payload is { name?: string; description?: string } => Boolean(payload));
+      // Registra comandos apos login (pode demorar)
+      client.commands = await deployCommandsAuto(token, client);
+      commandPayloads = Array.from(client.commands.values())
+        .map((command: CommandModule) => command.data?.toJSON())
+        .filter((payload): payload is { name?: string; description?: string } => Boolean(payload));
+    },
+  });
 }
 
 main().catch(error => {

@@ -45,6 +45,16 @@ function createMemoryStore() {
       records.set(id, { ...current, ...update, atualizadoEm: at });
       return true;
     },
+    deleteExpiredOrRevoked: async at => {
+      let deleted = 0;
+      for (const [id, record] of records) {
+        if (record.expiresAt <= at || record.revogadoEm !== null) {
+          records.delete(id);
+          deleted += 1;
+        }
+      }
+      return deleted;
+    },
   };
   return { records, store };
 }
@@ -148,6 +158,22 @@ test('expires sessions and stores refreshed OAuth tokens without exposing cipher
   assert.equal(await service.resolve(created.sessionToken), null);
   assert.equal(await service.touch(created.sessionToken), null);
   assert.equal(await service.revoke(created.sessionToken), false);
+});
+
+test('prunes expired sessions before creating a new session', async () => {
+  const { records, store } = createMemoryStore();
+  let now = NOW;
+  const service = createSessionService({
+    store,
+    encryptionKey: KEY,
+    now: () => now,
+    sessionTtlMs: 1_000,
+  });
+  await service.create({ userId: 'user-1', username: 'Matheus', accessToken: 'first' });
+  now = new Date(NOW.getTime() + 1_001);
+  await service.create({ userId: 'user-1', username: 'Matheus', accessToken: 'second' });
+
+  assert.equal(records.size, 1);
 });
 
 test('does not return a session if it is revoked during a touch', async () => {

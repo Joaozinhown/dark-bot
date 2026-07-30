@@ -6,7 +6,7 @@ const validEnvironment = {
   ADMIN_PANEL_ENABLED: 'true',
   CLIENT_ID: '123456789012345678',
   DISCORD_CLIENT_SECRET: 'discord-secret',
-  DISCORD_REDIRECT_URI: 'https://panel.example.com/api/auth/callback',
+  DISCORD_REDIRECT_URI: 'https://admin-dta-bot.discloud.app/api/auth/callback',
   PANEL_COOKIE_SECRET: 'a'.repeat(32),
   PANEL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   PORT: '8080',
@@ -48,4 +48,23 @@ test('allows an HTTP redirect only on loopback for local development', () => {
   });
   assert.equal(config.enabled, true);
   if (config.enabled) assert.equal(config.isProduction, false);
+});
+
+test('rejects an unapproved HTTPS redirect in production', () => {
+  assert.throws(
+    () => readPanelConfig({
+      ...validEnvironment,
+      DISCORD_REDIRECT_URI: 'https://dta-admin.discloud.app/api/auth/callback',
+      NODE_ENV: 'production',
+    }),
+    /DISCORD_REDIRECT_URI/i,
+  );
+  assert.throws(
+    () => readPanelConfig({
+      ...validEnvironment,
+      DISCORD_REDIRECT_URI: 'https://admin-dta-bot.discloud.app/api/auth/callback?next=invalid',
+      NODE_ENV: 'production',
+    }),
+    /DISCORD_REDIRECT_URI/i,
+  );
 });

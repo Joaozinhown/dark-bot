@@ -5,6 +5,7 @@
 html {
   min-width: 320px;
   min-height: 100%;
+  overflow-x: hidden;
   background: var(--color-bg);
 }
 

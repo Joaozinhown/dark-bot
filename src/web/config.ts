@@ -17,6 +17,8 @@ export interface EnabledPanelConfig {
 
 export type PanelConfig = DisabledPanelConfig | EnabledPanelConfig;
 
+const PRODUCTION_REDIRECT_URI = 'https://admin-dta-bot.discloud.app/api/auth/callback';
+
 const enabledConfigSchema = z.object({
   CLIENT_ID: z.string().regex(/^\d{16,22}$/),
   DISCORD_CLIENT_SECRET: z.string().min(1),
@@ -47,6 +49,12 @@ export function readPanelConfig(
     throw new Error('DISCORD_REDIRECT_URI deve usar HTTPS ou loopback HTTP.');
   }
 
+  const isProduction = parsed.data.NODE_ENV === 'production'
+    || new URL(parsed.data.DISCORD_REDIRECT_URI).protocol === 'https:';
+  if (isProduction && parsed.data.DISCORD_REDIRECT_URI !== PRODUCTION_REDIRECT_URI) {
+    throw new Error(`DISCORD_REDIRECT_URI deve ser ${PRODUCTION_REDIRECT_URI} em producao.`);
+  }
+
   const encryptionKey = Buffer.from(parsed.data.PANEL_ENCRYPTION_KEY, 'base64');
   if (encryptionKey.length !== 32 || encryptionKey.toString('base64') !== parsed.data.PANEL_ENCRYPTION_KEY) {
     throw new Error('PANEL_ENCRYPTION_KEY deve ser base64 de exatamente 32 bytes.');
@@ -60,7 +68,6 @@ export function readPanelConfig(
     cookieSecret: parsed.data.PANEL_COOKIE_SECRET,
     encryptionKey,
     port: parsed.data.PORT,
-    isProduction: parsed.data.NODE_ENV === 'production'
-      || new URL(parsed.data.DISCORD_REDIRECT_URI).protocol === 'https:',
+    isProduction,
   };
 }

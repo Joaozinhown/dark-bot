@@ -7,9 +7,11 @@ import type {
   Health,
   Overview,
   Pool,
+  PoolDetail,
   RankingEntry,
   Session,
   Team,
+  ManagementData,
 } from '../types/api';
 
 const now = Date.now();
@@ -33,7 +35,7 @@ export const mockGuilds: Guild[] = [
   },
   {
     id: '1248523813054197918',
-    name: 'Queens Trials Staff',
+    name: 'DTA Staff',
     icon: null,
     accessSource: 'admin_role',
     capabilities: ['manage_bot'],
@@ -54,7 +56,7 @@ const activeConfrontations: ActiveConfrontation[] = [
     poolId: 3,
     formato: 'MD5',
     status: 'veto',
-    timeARoleId: 'team-queens',
+    timeARoleId: 'team-aurora',
     timeBRoleId: 'team-eclipse',
     timeAVitorias: 1,
     timeBVitorias: 1,
@@ -94,7 +96,7 @@ export const mockPools: Pool[] = [
 ];
 
 export const mockTeams: Team[] = [
-  { id: 'team-queens', name: 'Queens of the Fog', color: '#8f32d9', memberCount: 7, position: 12 },
+  { id: 'team-aurora', name: 'Aurora', color: '#8f32d9', memberCount: 7, position: 12 },
   { id: 'team-eclipse', name: 'Eclipse Gaming', color: '#dc143c', memberCount: 6, position: 11 },
   { id: 'team-legacy', name: 'Legacy Survivors', color: '#c9a227', memberCount: 8, position: 10 },
   { id: 'team-void', name: 'Void Walkers', color: '#2ecc71', memberCount: 5, position: 9 },
@@ -110,7 +112,7 @@ export const mockRecentConfrontations: ConfrontationSummary[] = [
 ];
 
 export const mockRanking: RankingEntry[] = [
-  { nome: 'Queens of the Fog', vitorias: 12, derrotas: 3 },
+  { nome: 'Aurora', vitorias: 12, derrotas: 3 },
   { nome: 'Legacy Survivors', vitorias: 10, derrotas: 5 },
   { nome: 'Eclipse Gaming', vitorias: 8, derrotas: 6 },
   { nome: 'Void Walkers', vitorias: 6, derrotas: 7 },
@@ -139,7 +141,7 @@ export const mockAudit: AuditEntry[] = [
     action: 'confrontation.closed',
     entityType: 'confrontation',
     entityId: '183',
-    details: { reason: 'Série concluída', winner: 'Queens of the Fog' },
+    details: { reason: 'Série concluída', winner: 'Aurora' },
     criadoEm: isoBefore(176),
   },
   {
@@ -149,7 +151,7 @@ export const mockAudit: AuditEntry[] = [
     action: 'result.recorded',
     entityType: 'set',
     entityId: '183-4',
-    details: { winner: 'Queens of the Fog', score: '3-1' },
+    details: { winner: 'Aurora', score: '3-1' },
     criadoEm: isoBefore(182),
   },
   {
@@ -184,4 +186,40 @@ export const mockOverview: Overview = {
   },
   confrontations: activeConfrontations,
   pools: mockPools,
+};
+
+const poolMaps = [
+  ["Azarov's Resting Place", 'Shelter Woods', 'Ormond Lake Mine'],
+  ['Wretched Shop', 'Midwich Elementary School', 'Suffocation Pit', 'Ironworks of Misery', "Thompson's House"],
+  ['Dead Dawg Saloon', 'Coal Tower', 'Treatment Theater', 'Blood Lodge', 'Toba Landing'],
+];
+
+export const mockPoolDetails: PoolDetail[] = mockPools.map((pool, poolIndex) => ({
+  id: pool.id,
+  guildId: mockGuilds[0]!.id,
+  nome: pool.nome,
+  formato: pool.formato as 'MD3' | 'MD5',
+  ativa: pool.ativa,
+  mapas: (poolMaps[poolIndex] ?? ['Mapa 1', 'Mapa 2', 'Mapa 3']).map((nome, index) => ({
+    id: pool.id * 100 + index,
+    poolId: pool.id,
+    nome,
+    ordem: index + 1,
+  })),
+  killers: Array.from({ length: pool.killers }, (_, index) => ({
+    id: pool.id * 1000 + index,
+    poolId: pool.id,
+    nome: `Killer ${index + 1}`,
+    ordem: index + 1,
+  })),
+}));
+
+export const mockManagement: ManagementData = {
+  adminRoleIds: [mockTeams[0]!.id],
+  roles: mockTeams.map(team => ({ ...team, editable: true })),
+  channels: [
+    { id: '1352013816543100938', name: 'confronto-01' },
+    { id: '1352013816543100939', name: 'confronto-02' },
+  ],
+  activeConfrontations,
 };

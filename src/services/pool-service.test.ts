@@ -61,6 +61,12 @@ class MemoryPoolStore implements PoolStore {
       })));
   }
 
+  async listPools(guildId: string): Promise<PoolWithItems[]> {
+    return structuredClone(this.pools
+      .filter(entry => entry.guildId === guildId)
+      .sort((left, right) => left.id - right.id));
+  }
+
   async createMap(input: { poolId: number; nome: string; ordem: number }): Promise<PoolItem> {
     const created = item(this.nextItemId++, input.poolId, input.nome, input.ordem);
     this.updateItems(input.poolId, 'mapas', entries => [...entries, created]);
@@ -197,6 +203,19 @@ test('lists only active guild pools ordered by pool and item order', async () =>
   assert.deepEqual(listed.map(entry => entry.id), [1, 3]);
   assert.deepEqual(listed[0].killers.map(entry => entry.nome), ['A', 'B']);
   assert.deepEqual(listed[1].mapas.map(entry => entry.nome), ['Primeiro', 'Segundo']);
+});
+
+test('lists active and inactive guild pools for administration', async () => {
+  const service = createPoolService(new MemoryPoolStore([
+    pool({ id: 2, guildId: 'guild-a', ativa: false }),
+    pool({ id: 1, guildId: 'guild-a', ativa: true }),
+    pool({ id: 3, guildId: 'guild-b', ativa: false }),
+  ]));
+
+  assert.deepEqual((await service.listAll('guild-a')).map(entry => [entry.id, entry.ativa]), [
+    [1, true],
+    [2, false],
+  ]);
 });
 
 test('toggles and deletes a pool in its guild', async () => {

@@ -5,10 +5,10 @@ interface BrandProps {
 export function Brand({ compact = false }: BrandProps) {
   return (
     <div className={`brand ${compact ? 'brand--compact' : ''}`}>
-      <img className="brand__logo" src="/queens-trials-logo.png" alt="" />
+      <img className="brand__logo" src="/dta-symbol.png" alt="" />
       <div className="brand__text">
-        <strong>Queens Trials</strong>
-        <span>Administração DTA</span>
+        <strong>Dark Trials Arena</strong>
+        <span>Painel administrativo</span>
       </div>
     </div>
   );

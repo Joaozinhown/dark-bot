@@ -11,7 +11,7 @@
 
 ## Target architecture
 
-One Node.js process will host Discord client, API and built frontend when Platinum cutover is approved.
+One Node.js process hosts the Discord client, API and built frontend on the Diamond plan.
 
 ```text
 Browser
@@ -24,7 +24,21 @@ Browser
 
 Slash command handlers and API controllers must call the same application services. The panel cannot duplicate tournament rules.
 
-Production remains `TYPE=bot` while feature development is behind `ADMIN_PANEL_ENABLED=false`. Final Platinum cutover requires separate approval, backup and rollback package.
+The Discloud Diamond deployment uses `TYPE=site`, port `8080`, `0.0.0.0` and a reserved subdomain because the same process exposes a web interface. Backup and rollback remain mandatory.
+
+## Implementation status
+
+| Phase | Status | Evidence |
+| --- | --- | --- |
+| Baseline and contracts | Complete | 11 names and full payload hash protected. |
+| Shared services | Complete | Slash handlers and panel runtime share domain services. |
+| Persistence | Complete | Prisma migrations, idempotent presets, sessions, audit and command settings. |
+| OAuth2 and API | Complete | Session, CSRF, rate limit, guild authorization and safe errors. |
+| Panel | Complete | Seven operational views, responsive layout and Playwright coverage. |
+| Administration P0 | Complete | Pools, teams, members, permissions, command toggles and confrontations. |
+| Live operations | Complete for current scope | SSE, reconnect, heartbeat, stream limits and health. |
+| Custom command templates | Deferred | Would require a new interaction contract or Message Content intent. |
+| Diamond deployment | Cutover prepared | `admin-dta-bot` is the target Discloud subdomain; `dta-admin` remains the rollback app until validation. |
 
 ## Authorization model
 
@@ -105,16 +119,18 @@ Exit: real data visible only to authorized users; no write actions enabled.
 
 Exit: panel and slash flows produce equivalent results in test guild.
 
-### Phase 6: command templates and live operations
+### Phase 6: live operations and future command templates
 
-- Add per-guild command toggles and safe response templates.
+- Add per-guild command toggles.
 - Add live veto state, reconnection, health and operational alerts.
+
+Safe response templates remain outside the current release. They cannot become slash commands without changing the frozen command catalog, and text triggers would require an additional Discord intent.
 
 Exit: no duplicate commands, cross-guild events or stale orphan registrations.
 
-### Phase 7: Platinum cutover
+### Phase 7: Diamond deployment
 
-- Confirm Platinum subscription and production app ID.
+- Confirm Diamond subscription and production app ID.
 - Create backup and version tag.
 - Change hosting mode only in cutover PR after approval.
 - Bind port 8080 on `0.0.0.0`, configure subdomain and OAuth callback.

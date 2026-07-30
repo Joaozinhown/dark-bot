@@ -75,12 +75,52 @@ export interface Team {
   color: string;
   memberCount: number;
   position: number;
+  editable?: boolean;
 }
 
 export interface Command {
   name: string;
   description: string;
+  enabled?: boolean;
 }
+
+export interface PoolItem {
+  id: number;
+  poolId: number;
+  nome: string;
+  ordem: number;
+}
+
+export interface PoolDetail {
+  id: number;
+  guildId: string;
+  nome: string;
+  formato: 'MD3' | 'MD5';
+  ativa: boolean;
+  mapas: PoolItem[];
+  killers: PoolItem[];
+}
+
+export interface ManagementData {
+  adminRoleIds: string[];
+  roles: Array<Team & { editable: boolean }>;
+  channels: Array<{ id: string; name: string }>;
+  activeConfrontations: ActiveConfrontation[];
+}
+
+export type PanelAction =
+  | { type: 'pool.create'; name: string; format: 'MD3' | 'MD5' }
+  | { type: 'pool.add-map' | 'pool.remove-map' | 'pool.add-killer' | 'pool.remove-killer'; poolId: number; name: string }
+  | { type: 'pool.toggle' | 'pool.delete'; poolId: number }
+  | { type: 'team.create'; name: string; color: string }
+  | { type: 'team.rename'; roleId: string; name: string }
+  | { type: 'team.delete'; roleId: string }
+  | { type: 'team.member-add' | 'team.member-remove'; roleId: string; userId: string }
+  | { type: 'permission.set-admin-roles'; roleIds: string[] }
+  | { type: 'command.set-enabled'; commandName: string; enabled: boolean }
+  | { type: 'confrontation.create'; poolId: number; teamARoleId: string; teamBRoleId: string; channelId: string }
+  | { type: 'confrontation.result'; confrontationId: number; winnerRoleId: string }
+  | { type: 'confrontation.close'; confrontationId: number; reason: string | null };
 
 export interface RankingEntry {
   nome: string;
@@ -122,4 +162,6 @@ export type GuildResource =
   | 'teams'
   | 'commands'
   | 'ranking'
-  | 'audit';
+  | 'audit'
+  | 'pool-details'
+  | 'management';

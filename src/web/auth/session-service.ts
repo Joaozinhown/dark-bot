@@ -41,6 +41,7 @@ export interface SessionStore {
   touchActive(id: string, at: Date): Promise<SessionRecord | null>;
   revokeActive(id: string, at: Date): Promise<boolean>;
   updateTokensActive(id: string, update: SessionTokenUpdate, at: Date): Promise<boolean>;
+  deleteExpiredOrRevoked(at: Date): Promise<number>;
 }
 
 export interface PublicSession {
@@ -120,6 +121,17 @@ const prismaSessionStore: SessionStore = {
     });
     return result.count === 1;
   },
+  async deleteExpiredOrRevoked(at) {
+    const result = await prisma.webSession.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lte: at } },
+          { revogadoEm: { not: null } },
+        ],
+      },
+    });
+    return result.count;
+  },
 };
 
 export function createSessionService(options: SessionServiceOptions) {
@@ -141,6 +153,7 @@ export function createSessionService(options: SessionServiceOptions) {
       const createdAt = now();
       const expiresAt = input.expiresAt ?? new Date(createdAt.getTime() + sessionTtlMs);
       if (expiresAt <= createdAt) throw new Error('Session expiration must be in the future');
+      await store.deleteExpiredOrRevoked(createdAt);
 
       const session = createOpaqueToken();
       const csrf = createOpaqueToken();
