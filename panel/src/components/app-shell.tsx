@@ -56,6 +56,7 @@ function NavigationLink({ item, onNavigate }: { item: NavigationItem; onNavigate
       href={item.href}
       className={`navigation-link ${isActive ? 'navigation-link--active' : ''}`}
       aria-current={isActive ? 'page' : undefined}
+      data-tooltip={item.label}
       onClick={onNavigate}
     >
       <Icon aria-hidden="true" />

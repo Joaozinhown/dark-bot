@@ -96,7 +96,7 @@ export const mockPools: Pool[] = [
 ];
 
 export const mockTeams: Team[] = [
-  { id: 'team-aurora', name: 'Aurora', color: '#8f32d9', memberCount: 7, position: 12 },
+  { id: 'team-aurora', name: 'Aurora', color: '#df172c', memberCount: 7, position: 12 },
   { id: 'team-eclipse', name: 'Eclipse Gaming', color: '#dc143c', memberCount: 6, position: 11 },
   { id: 'team-legacy', name: 'Legacy Survivors', color: '#c9a227', memberCount: 8, position: 10 },
   { id: 'team-void', name: 'Void Walkers', color: '#2ecc71', memberCount: 5, position: 9 },
@@ -134,6 +134,48 @@ export const mockCommands: Command[] = [
 ];
 
 export const mockAudit: AuditEntry[] = [
+  {
+    id: 38,
+    guildId: mockGuilds[0]!.id,
+    actorUserId: '329183750129385710',
+    action: 'veto.pick',
+    entityType: 'confrontation',
+    entityId: '185',
+    details: {
+      actorDisplayName: 'Player One',
+      actorUsername: 'player.one',
+      channelId: '991830123857102341',
+      killer: 'Nurse',
+      messageId: '991830123857102349',
+      setNumber: 1,
+      teamRoleId: 'team-aurora',
+      teamRoleName: 'Aurora',
+      teamSide: 'A',
+      vetoStep: 5,
+    },
+    criadoEm: isoBefore(12),
+  },
+  {
+    id: 37,
+    guildId: mockGuilds[0]!.id,
+    actorUserId: '481902374650129384',
+    action: 'veto.ban',
+    entityType: 'confrontation',
+    entityId: '185',
+    details: {
+      actorDisplayName: 'Rival Captain',
+      actorUsername: 'rival.captain',
+      channelId: '991830123857102341',
+      killer: 'Spirit',
+      messageId: '991830123857102344',
+      setNumber: null,
+      teamRoleId: 'team-rift',
+      teamRoleName: 'Riftwalkers',
+      teamSide: 'B',
+      vetoStep: 4,
+    },
+    criadoEm: isoBefore(18),
+  },
   {
     id: 36,
     guildId: mockGuilds[0]!.id,

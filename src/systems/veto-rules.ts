@@ -1,4 +1,11 @@
-import { VetoVez } from '../types/index';
+import { PoolFormato, VetoVez } from '../types/index';
+
+export type VetoAction = 'pick' | 'ban';
+
+export interface VetoActionState {
+  action: VetoAction;
+  isTiebreak: boolean;
+}
 
 export interface SetAssignment {
   numero: number;
@@ -15,6 +22,19 @@ export function getKillerTeamForSet(starter: VetoVez, setNumber: number): VetoVe
   const isStarterSet = setNumber % 2 === 1;
   if (isStarterSet) return starter;
   return starter === 'A' ? 'B' : 'A';
+}
+
+export function getVetoAction(format: PoolFormato, stepIndex: number): VetoActionState {
+  const pickSteps = format === 'MD3' ? [4, 5] : [2, 3, 6, 7];
+  const tiebreakStartsAt = format === 'MD3' ? 6 : 8;
+  return {
+    action: pickSteps.includes(stepIndex) ? 'pick' : 'ban',
+    isTiebreak: stepIndex >= tiebreakStartsAt,
+  };
+}
+
+export function getPickSetNumber(action: VetoAction, pickedKillerCount: number): number | null {
+  return action === 'pick' ? pickedKillerCount + 1 : null;
 }
 
 export function createSetAssignments(

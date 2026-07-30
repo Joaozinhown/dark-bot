@@ -72,20 +72,25 @@ export function TeamsPage() {
         {query.isPending ? <LoadingState /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhum cargo encontrado" description="Cargos gerenciados pelo Discord não aparecem nesta lista." icon={<UsersRound aria-hidden="true" />} /> : null}
-        {filtered.length > 0 ? <div className="table-scroll"><table>
+        {filtered.length > 0 ? <><div className="table-scroll teams-table"><table>
           <thead><tr><th>Cargo</th><th>Membros</th><th>Posição</th><th>ID do Discord</th><th><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>{filtered.map(team => <tr key={team.id}>
             <td><span className="role-name"><span className="role-swatch" style={{ backgroundColor: team.color }} aria-hidden="true" /><strong>{team.name}</strong></span></td>
             <td>{team.memberCount}</td><td>{team.position}</td><td className="cell-mono">{team.id}</td>
             <td><button className="button button--secondary" type="button" onClick={() => { setSelectedRoleId(team.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button></td>
           </tr>)}</tbody>
-        </table></div> : null}
+        </table></div>
+        <div className="mobile-record-list teams-mobile-list">{filtered.map(team => <article className="mobile-record" key={team.id}>
+          <header><div><span className="role-name"><span className="role-swatch" style={{ backgroundColor: team.color }} aria-hidden="true" /><strong>{team.name}</strong></span><span>ID {team.id}</span></div></header>
+          <dl className="mobile-record__facts"><div><dt>Membros</dt><dd>{team.memberCount}</dd></div><div><dt>Posição</dt><dd>{team.position}</dd></div></dl>
+          <button className="button button--secondary" type="button" onClick={() => { setSelectedRoleId(team.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button>
+        </article>)}</div></> : null}
       </section>
 
       <AdminDialog open={dialog === 'create'} title="Criar cargo de equipe" description="O cargo será criado diretamente no Discord." onClose={() => setDialog(null)}>
         <form className="admin-form" onSubmit={createRole}>
           <label className="form-field">Nome<input name="name" required maxLength={80} autoFocus /></label>
-          <label className="form-field">Cor<input name="color" type="color" defaultValue="#8f32d9" required /></label>
+          <label className="form-field">Cor<input name="color" type="color" defaultValue="#df172c" required /></label>
           <MutationFeedback error={action.error} />
           <div className="form-actions"><button className="button button--secondary" type="button" onClick={() => setDialog(null)}>Cancelar</button><button className="button button--primary" type="submit" disabled={action.isPending}>Criar cargo</button></div>
         </form>

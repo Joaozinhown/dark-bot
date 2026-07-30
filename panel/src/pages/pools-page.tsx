@@ -86,7 +86,7 @@ export function PoolsPage() {
         {query.isPending ? <LoadingState /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhuma pool encontrada" description="Ajuste os filtros ou crie um novo preset." icon={<Layers3 aria-hidden="true" />} /> : null}
-        {filtered.length > 0 ? <div className="table-scroll"><table>
+        {filtered.length > 0 ? <><div className="table-scroll pools-table"><table>
           <thead><tr><th>Pool</th><th>Formato</th><th>Mapas</th><th>Killers</th><th>Uso</th><th>Estado</th><th><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>{filtered.map(pool => <tr key={pool.id}>
             <td className="cell-primary"><strong>{pool.nome}</strong><span>ID {pool.id}</span></td>
@@ -95,7 +95,15 @@ export function PoolsPage() {
             <td><StatusBadge status={pool.ativa ? 'ativo' : 'inativo'} label={pool.ativa ? 'Ativa' : 'Inativa'} /></td>
             <td><button className="button button--secondary" type="button" onClick={() => { setSelectedPoolId(pool.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button></td>
           </tr>)}</tbody>
-        </table></div> : null}
+        </table></div><div className="mobile-record-list pools-mobile-list">{filtered.map(pool => <article className="mobile-record" key={pool.id}>
+          <header><div><strong>{pool.nome}</strong><span>ID {pool.id} / {pool.formato}</span></div><StatusBadge status={pool.ativa ? 'ativo' : 'inativo'} label={pool.ativa ? 'Ativa' : 'Inativa'} /></header>
+          <dl className="mobile-record__facts mobile-record__facts--three">
+            <div><dt>Mapas</dt><dd>{pool.mapas}</dd></div>
+            <div><dt>Killers</dt><dd>{pool.killers}</dd></div>
+            <div><dt>Uso</dt><dd>{pool.confrontos}</dd></div>
+          </dl>
+          <button className="button button--secondary button--wide" type="button" onClick={() => { setSelectedPoolId(pool.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button>
+        </article>)}</div></> : null}
       </section>
 
       <AdminDialog open={dialog === 'create'} title="Criar pool" description="O formato define a quantidade exata de mapas presetados." onClose={() => setDialog(null)}>

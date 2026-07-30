@@ -7,14 +7,42 @@ import {
   TextChannel,
 } from 'discord.js';
 import prisma from '../database/client';
-import { PoolConfig, VetoVez } from '../types/index';
+import {
+  VetoSelectionServiceError,
+  vetoSelectionService,
+} from '../services/veto-selection-service';
+import { PoolConfig, PoolFormato, VetoVez } from '../types/index';
 import {
   createBanEmbed,
   createErrorEmbed,
   createSetsReadyEmbed,
   createVetoEmbed,
 } from '../utils/embeds';
-import { createSetAssignments } from './veto-rules';
+import { guildEventBus } from '../web/realtime/event-bus';
+import { createSetAssignments, getVetoAction } from './veto-rules';
+
+const VETO_STEP_SEND_ATTEMPTS = 3;
+const VETO_STEP_RETRY_DELAY_MS = 750;
+
+async function sendVetoStepWithRetry(
+  guild: Guild,
+  confrontoId: number,
+  channel: TextChannel,
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= VETO_STEP_SEND_ATTEMPTS; attempt += 1) {
+    try {
+      await sendVetoStep(guild, confrontoId, channel);
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+      if (attempt < VETO_STEP_SEND_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, VETO_STEP_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError;
+}
 
 export async function startVeto(
   guild: Guild,
@@ -60,15 +88,7 @@ async function sendVetoStep(
   }
 
   const stepIndex = vetoState.set;
-  let action = 'ban';
-  let isTiebreak = false;
-  if (confronto.formato === 'MD3') {
-    if (stepIndex === 4 || stepIndex === 5) action = 'pick';
-    if (stepIndex > 5) isTiebreak = true;
-  } else {
-    if (stepIndex === 2 || stepIndex === 3 || stepIndex === 6 || stepIndex === 7) action = 'pick';
-    if (stepIndex > 7) isTiebreak = true;
-  }
+  const { action, isTiebreak } = getVetoAction(confronto.formato as PoolFormato, stepIndex);
 
   const timeARole = await guild.roles.fetch(confronto.timeARoleId);
   const timeBRole = await guild.roles.fetch(confronto.timeBRoleId);
@@ -89,15 +109,35 @@ async function sendVetoStep(
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(banSelect);
   const actionTextContent = action === 'pick' ? 'escolher o Killer' : 'banir um Killer';
   const message = await canalTexto.send({
+    nonce: `v-${confrontoId}-${stepIndex}`,
+    enforceNonce: true,
     content: `<@&${vezRole.id}>, chegou a vez do seu time **${actionTextContent}**!`,
     embeds: [embed],
     components: [row],
   });
 
-  await prisma.vetoState.update({
-    where: { confrontoId },
-    data: { messageId: message.id },
-  });
+  try {
+    const updated = await prisma.vetoState.updateMany({
+      where: { confrontoId, set: stepIndex, messageId: null },
+      data: { messageId: message.id },
+    });
+    if (updated.count !== 1) {
+      const currentState = await prisma.vetoState.findUnique({ where: { confrontoId } });
+      if (currentState?.messageId !== message.id) {
+        await message.delete().catch(() => undefined);
+      }
+    }
+  } catch (error: unknown) {
+    let currentState;
+    try {
+      currentState = await prisma.vetoState.findUnique({ where: { confrontoId } });
+    } catch {
+      throw error;
+    }
+    if (currentState?.messageId === message.id) return;
+    await message.delete().catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function handleBanSelection(
@@ -126,6 +166,25 @@ export async function handleBanSelection(
     return;
   }
 
+  if (
+    interaction.guildId !== confronto.guildId
+    || interaction.channelId !== confronto.channelId
+  ) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Esta interacao nao pertence ao canal deste confronto.')],
+      flags: 64,
+    });
+    return;
+  }
+
+  if (!vetoState.messageId || interaction.message.id !== vetoState.messageId) {
+    await interaction.reply({
+      embeds: [createErrorEmbed('Esta etapa ja expirou. Use a mensagem mais recente.')],
+      flags: 64,
+    });
+    return;
+  }
+
   const timeARole = await interaction.guild!.roles.fetch(confronto.timeARoleId);
   const timeBRole = await interaction.guild!.roles.fetch(confronto.timeBRoleId);
   if (!timeARole || !timeBRole) {
@@ -146,65 +205,97 @@ export async function handleBanSelection(
     return;
   }
 
-  const killers = JSON.parse(vetoState.killersRestantes) as string[];
-  const killerBanido = interaction.values[0];
-  const killerIndex = killers.indexOf(killerBanido);
-  if (killerIndex < 0 || killers.length <= 1) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Killer indisponivel. Use a mensagem mais recente.')],
+  await interaction.deferUpdate();
+
+  const selectedKiller = interaction.values[0];
+  if (!selectedKiller) {
+    await interaction.followUp({
+      embeds: [createErrorEmbed('Nenhum killer foi selecionado.')],
       flags: 64,
     });
     return;
   }
 
-  await interaction.deferUpdate();
-
-  const stepIndex = vetoState.set;
-  let action = 'ban';
-  let isTiebreak = false;
-  if (confronto.formato === 'MD3') {
-    if (stepIndex === 4 || stepIndex === 5) action = 'pick';
-    if (stepIndex > 5) isTiebreak = true;
-  } else {
-    if (stepIndex === 2 || stepIndex === 3 || stepIndex === 6 || stepIndex === 7) action = 'pick';
-    if (stepIndex > 7) isTiebreak = true;
+  let selection;
+  try {
+    selection = await vetoSelectionService.select({
+      guildId: confronto.guildId,
+      channelId: interaction.channelId,
+      confrontationId: confrontoId,
+      format: confronto.formato as PoolFormato,
+      stepIndex: vetoState.set,
+      turn: vetoState.vezDe as VetoVez,
+      messageId: interaction.message.id,
+      killersSerialized: vetoState.killersRestantes,
+      pickedKillersSerialized: vetoState.killerEscolhido ?? '[]',
+      killer: selectedKiller,
+      actor: {
+        userId: interaction.user.id,
+        username: interaction.user.username,
+        displayName: interaction.user.globalName ?? interaction.user.displayName,
+        teamSide: vetoState.vezDe as VetoVez,
+        teamRoleId: vezRoleId,
+        teamRoleName: vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name,
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof VetoSelectionServiceError
+      ? error.message
+      : 'Nao foi possivel registrar esta escolha. Tente novamente pela mensagem mais recente.';
+    if (!(error instanceof VetoSelectionServiceError)) {
+      console.error(`[Veto] Falha ao registrar escolha no confronto ${confrontoId}:`, error);
+    }
+    await interaction.followUp({ embeds: [createErrorEmbed(message)], flags: 64 });
+    return;
   }
 
-  const killersRestantes = killers.filter((_, index) => index !== killerIndex);
-  const pickedKillers = vetoState.killerEscolhido ? JSON.parse(vetoState.killerEscolhido) : [];
-  if (action === 'pick') {
-    pickedKillers.push(killerBanido);
-  }
-
-  const proximaVez: VetoVez = vetoState.vezDe === 'A' ? 'B' : 'A';
-  const proximoTimeName = proximaVez === 'A' ? timeARole.name : timeBRole.name;
+  const proximoTimeName = selection.nextTurn === 'A' ? timeARole.name : timeBRole.name;
   const currentTeamName = vetoState.vezDe === 'A' ? timeARole.name : timeBRole.name;
-  const verbText = action === 'pick' ? 'escolheu' : 'baniu';
+  const verbText = selection.action === 'pick' ? 'escolheu' : 'baniu';
 
-  await interaction.editReply({
-    content: `O time **${currentTeamName}** ${verbText} o Killer **${killerBanido}**!`,
-    embeds: [createBanEmbed(
-      action,
-      currentTeamName,
-      killerBanido,
-      proximoTimeName,
-      killersRestantes.length > 1,
-      isTiebreak,
-    )],
-    components: [],
+  let editFailure: unknown;
+  try {
+    await interaction.editReply({
+      content: `O time **${currentTeamName}** ${verbText} o Killer **${selection.selectedKiller}**!`,
+      embeds: [createBanEmbed(
+        selection.action,
+        currentTeamName,
+        selection.selectedKiller,
+        proximoTimeName,
+        selection.remainingKillers.length > 1,
+        selection.isTiebreak,
+      )],
+      components: [],
+    });
+  } catch (error: unknown) {
+    editFailure = error;
+    console.error(`[Veto] Escolha persistida, mas a mensagem ${interaction.message.id} nao foi atualizada:`, error);
+  }
+
+  guildEventBus.publish(confronto.guildId, `veto.${selection.action}`, {
+    confrontationId: confrontoId,
+    actorUserId: interaction.user.id,
+    killer: selection.selectedKiller,
+    setNumber: selection.setNumber,
   });
 
-  await prisma.vetoState.update({
-    where: { confrontoId },
-    data: {
-      killersRestantes: JSON.stringify(killersRestantes),
-      killerEscolhido: JSON.stringify(pickedKillers),
-      vezDe: proximaVez,
-      set: stepIndex + 1,
-    },
-  });
+  try {
+    await sendVetoStepWithRetry(interaction.guild!, confrontoId, interaction.channel as TextChannel);
+  } catch (error: unknown) {
+    console.error(`[Veto] Escolha persistida, mas a proxima etapa do confronto ${confrontoId} nao foi enviada:`, error);
+    await interaction.followUp({
+      embeds: [createErrorEmbed('A escolha foi registrada, mas a proxima etapa nao foi enviada apos tres tentativas. Avise a staff.')],
+      flags: 64,
+    });
+    return;
+  }
 
-  await sendVetoStep(interaction.guild!, confrontoId, interaction.channel as TextChannel);
+  if (editFailure) {
+    await interaction.followUp({
+      embeds: [createErrorEmbed('A escolha foi registrada, mas a mensagem anterior nao pôde ser atualizada. Use a nova etapa enviada no canal.')],
+      flags: 64,
+    });
+  }
 }
 
 async function finalizeVeto(
@@ -250,10 +341,11 @@ async function finalizeVeto(
       where: { id: confrontoId },
       data: { status: 'em_andamento', currentSet: 1 },
     }),
-    prisma.vetoState.delete({ where: { confrontoId } }),
   ]);
 
   await canalTexto.send({
+    nonce: `v-final-${confrontoId}`,
+    enforceNonce: true,
     content: `Os times <@&${timeARole.id}> e <@&${timeBRole.id}> definiram todos os Killers para o confronto!
 Por favor, confiram na tabela abaixo qual time começará de Killer em cada SET.`,
     embeds: [createSetsReadyEmbed(
@@ -264,4 +356,10 @@ Por favor, confiram na tabela abaixo qual time começará de Killer em cada SET.
       `<@&${timeBRole.id}>`
     )],
   });
+
+  try {
+    await prisma.vetoState.deleteMany({ where: { confrontoId } });
+  } catch (error: unknown) {
+    console.error(`[Veto] Confronto ${confrontoId} finalizado, mas o estado de veto nao foi removido:`, error);
+  }
 }

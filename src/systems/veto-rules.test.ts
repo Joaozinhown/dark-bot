@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   createSetAssignments,
   drawStartingTeam,
+  getPickSetNumber,
   getKillerTeamForSet,
+  getVetoAction,
 } from './veto-rules';
 import { POOL_PRESETS } from '../data/pool-presets';
 
@@ -17,6 +19,41 @@ test('alternates the killer team from the drawn starter', () => {
   assert.equal(getKillerTeamForSet('A', 2), 'B');
   assert.equal(getKillerTeamForSet('A', 3), 'A');
   assert.equal(getKillerTeamForSet('B', 1), 'B');
+});
+
+test('classifies every MD3 veto step and marks tiebreak bans', () => {
+  assert.deepEqual(
+    Array.from({ length: 8 }, (_, stepIndex) => getVetoAction('MD3', stepIndex)),
+    [
+      { action: 'ban', isTiebreak: false },
+      { action: 'ban', isTiebreak: false },
+      { action: 'ban', isTiebreak: false },
+      { action: 'ban', isTiebreak: false },
+      { action: 'pick', isTiebreak: false },
+      { action: 'pick', isTiebreak: false },
+      { action: 'ban', isTiebreak: true },
+      { action: 'ban', isTiebreak: true },
+    ],
+  );
+});
+
+test('classifies every MD5 veto step and assigns set numbers only to picks', () => {
+  const actions = Array.from({ length: 10 }, (_, stepIndex) => getVetoAction('MD5', stepIndex));
+  assert.deepEqual(actions, [
+    { action: 'ban', isTiebreak: false },
+    { action: 'ban', isTiebreak: false },
+    { action: 'pick', isTiebreak: false },
+    { action: 'pick', isTiebreak: false },
+    { action: 'ban', isTiebreak: false },
+    { action: 'ban', isTiebreak: false },
+    { action: 'pick', isTiebreak: false },
+    { action: 'pick', isTiebreak: false },
+    { action: 'ban', isTiebreak: true },
+    { action: 'ban', isTiebreak: true },
+  ]);
+  assert.equal(getPickSetNumber('ban', 0), null);
+  assert.equal(getPickSetNumber('pick', 0), 1);
+  assert.equal(getPickSetNumber('pick', 3), 4);
 });
 
 test('pairs remaining killers with preset maps in pool order', () => {

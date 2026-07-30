@@ -59,6 +59,8 @@ export function useRealtimeSync(guildId: string): RealtimeState {
       'confrontation.create',
       'confrontation.result',
       'confrontation.close',
+      'veto.pick',
+      'veto.ban',
     ];
     const handleResourceEvent = () => {
       setState({ status: 'connected', lastEventAt: new Date() });

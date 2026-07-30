@@ -75,7 +75,7 @@ test('refreshes tokens and reads the current Discord user and guilds', async () 
         token_type: 'Bearer',
         expires_in: 7200,
         refresh_token: 'new-refresh-token',
-        scope: 'guilds identify',
+        scope: 'guilds identify identify',
       });
     }
     if (url.endsWith('/users/@me')) {
@@ -90,6 +90,7 @@ test('refreshes tokens and reads the current Discord user and guilds', async () 
   const guilds = await client.getCurrentUserGuilds(refreshed.accessToken);
 
   assert.equal(refreshed.refreshToken, 'new-refresh-token');
+  assert.deepEqual(refreshed.scopes, ['guilds', 'identify']);
   assert.deepEqual(user, { id: '42', username: 'Matheus', avatar: null, globalName: 'Matheus' });
   assert.deepEqual(guilds, [{ id: '99', name: 'DTA', icon: null, owner: true, permissions: '32' }]);
   assert.deepEqual(calls, [
@@ -112,5 +113,21 @@ test('rejects malformed or failed Discord responses without leaking response sec
     error => error instanceof DiscordOAuthError
       && !error.message.includes('must-not-leak')
       && !error.message.includes('input-secret'),
+  );
+});
+
+test('rejects token responses that grant scopes beyond the panel allowlist', async () => {
+  const client = createDiscordOAuthClient(config, async () => jsonResponse({
+    access_token: 'access-token',
+    token_type: 'Bearer',
+    expires_in: 3600,
+    refresh_token: 'refresh-token',
+    scope: 'identify guilds email',
+  }));
+
+  await assert.rejects(
+    () => client.exchangeCode('code'),
+    error => error instanceof DiscordOAuthError
+      && error.message === 'Discord OAuth returned unexpected scopes',
   );
 });

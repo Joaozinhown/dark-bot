@@ -25,14 +25,18 @@ export function RankingPage() {
         {query.isPending ? <LoadingState rows={6} /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data?.length === 0 ? <EmptyState title="Ranking ainda vazio" description="A classificação será calculada após o primeiro confronto encerrado." icon={<Trophy aria-hidden="true" />} /> : null}
-        {query.data && query.data.length > 0 ? <div className="table-scroll"><table className="ranking-table">
+        {query.data && query.data.length > 0 ? <><div className="table-scroll ranking-table-wrap"><table className="ranking-table">
           <thead><tr><th>Posição</th><th>Equipe</th><th>Vitórias</th><th>Derrotas</th><th>Aproveitamento</th></tr></thead>
           <tbody>{query.data.map((entry, index) => <tr key={entry.nome}>
             <td><span className={`rank-position ${index < 3 ? `rank-position--${index + 1}` : ''}`}>{index < 3 ? <Medal aria-hidden="true" /> : null}{index + 1}</span></td>
             <td className="cell-primary"><strong>{entry.nome}</strong><span>{entry.vitorias + entry.derrotas} confrontos</span></td>
             <td className="wins-cell">{entry.vitorias}</td><td>{entry.derrotas}</td><td>{getWinRate(entry.vitorias, entry.derrotas)}</td>
           </tr>)}</tbody>
-        </table></div> : null}
+        </table></div>
+        <div className="mobile-record-list ranking-mobile-list">{query.data.map((entry, index) => <article className="mobile-record" key={entry.nome}>
+          <header><div><strong>{entry.nome}</strong><span>{entry.vitorias + entry.derrotas} confrontos</span></div><span className={`rank-position ${index < 3 ? `rank-position--${index + 1}` : ''}`}>{index < 3 ? <Medal aria-hidden="true" /> : null}{index + 1}</span></header>
+          <dl className="mobile-record__facts mobile-record__facts--three"><div><dt>Vitórias</dt><dd>{entry.vitorias}</dd></div><div><dt>Derrotas</dt><dd>{entry.derrotas}</dd></div><div><dt>Aproveitamento</dt><dd>{getWinRate(entry.vitorias, entry.derrotas)}</dd></div></dl>
+        </article>)}</div></> : null}
       </section>
     </div>
   );
