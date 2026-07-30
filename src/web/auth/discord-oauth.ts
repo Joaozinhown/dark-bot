@@ -92,7 +92,7 @@ function mapTokens(input: unknown): DiscordOAuthTokens {
   const parsed = tokenResponseSchema.safeParse(input);
   if (!parsed.success) throw new DiscordOAuthError('Discord OAuth returned an invalid token response');
 
-  const scopes = parsed.data.scope.split(/\s+/).filter(Boolean);
+  const scopes = [...new Set(parsed.data.scope.split(/\s+/).filter(Boolean))];
   const hasExactScopes = scopes.length === OAUTH_SCOPES.length
     && OAUTH_SCOPES.every(scope => scopes.includes(scope));
   if (!hasExactScopes || scopes.some(scope => !OAUTH_SCOPES.includes(scope as (typeof OAUTH_SCOPES)[number]))) {

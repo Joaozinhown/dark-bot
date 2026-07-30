@@ -95,8 +95,8 @@ export function OverviewPage() {
                   description="Novos confrontos iniciados pelo bot aparecerão aqui em tempo real."
                   icon={<Swords aria-hidden="true" />}
                 />
-              ) : (
-                <div className="table-scroll">
+              ) : (<>
+                <div className="table-scroll overview-active-table">
                   <table>
                     <thead><tr><th>Confronto</th><th>Placar</th><th>Etapa</th><th>Início</th></tr></thead>
                     <tbody>{overview.data.confrontations.map(item => (
@@ -104,7 +104,26 @@ export function OverviewPage() {
                     ))}</tbody>
                   </table>
                 </div>
-              )}
+                <div className="mobile-record-list overview-active-mobile">
+                  {overview.data.confrontations.map(item => (
+                    <article className="mobile-record" key={item.id}>
+                      <header>
+                        <div><strong>Confronto #{item.id}</strong><span>{item.formato} · Set {item.currentSet}</span></div>
+                        <StatusBadge status={item.status} />
+                      </header>
+                      <dl className="mobile-record__facts">
+                        <div><dt>Placar</dt><dd>{item.timeAVitorias} × {item.timeBVitorias}</dd></div>
+                        <div><dt>Início</dt><dd>{formatDateTime(item.criadoEm)}</dd></div>
+                      </dl>
+                      <span className="matchup">
+                        <strong>{resolveTeamName(item.timeARoleId, teamNames)}</strong>
+                        <span>vs</span>
+                        <strong>{resolveTeamName(item.timeBRoleId, teamNames)}</strong>
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              </>)}
             </section>
 
             <aside className="page-section operation-status" aria-labelledby="operation-title">
@@ -146,7 +165,7 @@ export function OverviewPage() {
                 <p>Configuração presetada disponível para novos confrontos.</p>
               </div>
             </div>
-            <div className="table-scroll">
+            <div className="table-scroll overview-pools-table">
               <table>
                 <thead><tr><th>Pool</th><th>Formato</th><th>Mapas</th><th>Killers</th><th>Uso</th><th>Estado</th></tr></thead>
                 <tbody>{overview.data.pools.map(pool => (
@@ -157,6 +176,21 @@ export function OverviewPage() {
                   </tr>
                 ))}</tbody>
               </table>
+            </div>
+            <div className="mobile-record-list overview-pools-mobile">
+              {overview.data.pools.map(pool => (
+                <article className="mobile-record" key={pool.id}>
+                  <header>
+                    <div><strong>{pool.nome}</strong><span>ID {pool.id} · {pool.formato}</span></div>
+                    <StatusBadge status={pool.ativa ? 'ativo' : 'inativo'} label={pool.ativa ? 'Ativa' : 'Inativa'} />
+                  </header>
+                  <dl className="mobile-record__facts mobile-record__facts--three">
+                    <div><dt>Mapas</dt><dd>{pool.mapas}</dd></div>
+                    <div><dt>Killers</dt><dd>{pool.killers}</dd></div>
+                    <div><dt>Uso</dt><dd>{pool.confrontos}</dd></div>
+                  </dl>
+                </article>
+              ))}
             </div>
           </section>
         </>

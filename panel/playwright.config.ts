@@ -18,6 +18,14 @@ export default defineConfig({
       name: 'mobile-chromium',
       use: { ...devices['Pixel 7'] },
     },
+    {
+      name: 'tablet-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 900, height: 900 } },
+    },
+    {
+      name: 'narrow-mobile-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 320, height: 720 }, isMobile: true, hasTouch: true },
+    },
   ],
   webServer: {
     command: 'npm run panel:dev -- --host 127.0.0.1 --port 4173 --strictPort',

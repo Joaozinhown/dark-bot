@@ -18,6 +18,13 @@ export function CommandsPage() {
     `${command.name} ${command.description}`.toLowerCase().includes(search.toLowerCase())
   )), [query.data, search]);
 
+  function setCommandEnabled(commandName: string, enabled: boolean) {
+    setSuccess(null);
+    action.mutate({ type: 'command.set-enabled', commandName, enabled }, {
+      onSuccess: () => setSuccess(`/${commandName} atualizado neste servidor.`),
+    });
+  }
+
   return (
     <div className="page">
       <PageHeader
@@ -35,7 +42,7 @@ export function CommandsPage() {
         {query.isPending ? <LoadingState /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhum comando encontrado" description="Revise o texto usado na busca." icon={<CommandIcon aria-hidden="true" />} /> : null}
-        {filtered.length > 0 ? <div className="table-scroll"><table>
+        {filtered.length > 0 ? <><div className="table-scroll commands-table"><table>
           <thead><tr><th>Comando</th><th>Descrição</th><th>Registro</th><th>Disponibilidade</th></tr></thead>
           <tbody>{filtered.map(command => <tr key={command.name}>
             <td><code className="command-name">/{command.name}</code></td>
@@ -46,21 +53,16 @@ export function CommandsPage() {
                 type="checkbox"
                 checked={command.enabled !== false}
                 disabled={action.isPending}
-                onChange={event => {
-                  setSuccess(null);
-                  action.mutate({
-                    type: 'command.set-enabled',
-                    commandName: command.name,
-                    enabled: event.target.checked,
-                  }, {
-                    onSuccess: () => setSuccess(`/${command.name} atualizado neste servidor.`),
-                  });
-                }}
+                onChange={event => setCommandEnabled(command.name, event.target.checked)}
               />
               <span>{command.enabled === false ? 'Desativado' : 'Ativado'}</span>
             </label></td>
           </tr>)}</tbody>
-        </table></div> : null}
+        </table></div>
+        <div className="mobile-record-list commands-mobile-list">{filtered.map(command => <article className="mobile-record" key={command.name}>
+          <header><div><code className="command-name">/{command.name}</code><span>{command.description || 'Sem descrição informada'}</span></div><StatusBadge status="ativo" label="Registrado" /></header>
+          <label className="switch-control"><input type="checkbox" checked={command.enabled !== false} disabled={action.isPending} onChange={event => setCommandEnabled(command.name, event.target.checked)} /><span>{command.enabled === false ? 'Desativado' : 'Ativado'}</span></label>
+        </article>)}</div></> : null}
       </section>
     </div>
   );

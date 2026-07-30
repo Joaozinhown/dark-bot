@@ -12,7 +12,7 @@ test('renders the authenticated operational workspace without overflow', async (
   await expect(logo).toHaveAttribute('src', '/dta-symbol.png');
   await expect.poll(() => logo.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   const brandName = page.getByText('Dark Trials Arena', { exact: true }).first();
-  if ((page.viewportSize()?.width ?? 0) > 720) await expect(brandName).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) > 1100) await expect(brandName).toBeVisible();
   else await expect(brandName).toBeHidden();
 
   const overflow = await page.evaluate(() => ({
@@ -22,6 +22,13 @@ test('renders the authenticated operational workspace without overflow', async (
   }));
   expect(overflow.page).toBeLessThanOrEqual(overflow.viewport);
   expect(overflow.rootOverflow).toBe('hidden');
+
+  if ((page.viewportSize()?.width ?? 0) <= 720) {
+    await expect(page.locator('.overview-active-mobile')).toBeVisible();
+    await expect(page.locator('.overview-pools-mobile')).toBeVisible();
+    await expect(page.locator('.overview-active-table')).toBeHidden();
+    await expect(page.locator('.overview-pools-table')).toBeHidden();
+  }
 
   await page.screenshot({ path: testInfo.outputPath('overview.png'), fullPage: true });
 });
@@ -39,7 +46,7 @@ test('keeps primary navigation usable on a mobile viewport', async ({ page }, te
     const box = element.getBoundingClientRect();
     return { width: box.width, height: box.height };
   }));
-  expect(boxes.every(box => box.width >= 40 && box.height >= 40)).toBe(true);
+  expect(boxes.every(box => box.width >= 44 && box.height >= 44)).toBe(true);
 
   const overflow = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -50,6 +57,53 @@ test('keeps primary navigation usable on a mobile viewport', async ({ page }, te
   expect(overflow.rootOverflow).toBe('hidden');
 
   await page.screenshot({ path: testInfo.outputPath('confrontations-mobile.png'), fullPage: true });
+});
+
+test('uses readable mobile records for every data-heavy administration page', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 0) > 720, 'Mobile-only behavior.');
+  const routes = [
+    { path: '/equipes', mobile: '.teams-mobile-list', desktop: '.teams-table' },
+    { path: '/comandos', mobile: '.commands-mobile-list', desktop: '.commands-table' },
+    { path: '/ranking', mobile: '.ranking-mobile-list', desktop: '.ranking-table-wrap' },
+  ];
+
+  for (const route of routes) {
+    await page.goto(route.path);
+    await expect(page.locator(route.mobile)).toBeVisible();
+    await expect(page.locator(route.desktop)).toBeHidden();
+  }
+});
+
+test('applies the DTA visual system without shifting the operational HUD', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.summary-strip')).toBeVisible();
+
+  const visualTokens = await page.evaluate(() => {
+    const body = getComputedStyle(document.body);
+    const root = getComputedStyle(document.documentElement);
+    const summary = document.querySelector<HTMLElement>('.summary-strip');
+    return {
+      fontFamily: body.fontFamily,
+      background: body.backgroundColor,
+      primaryBackground: root.getPropertyValue('--color-accent').trim(),
+      summaryColumns: summary ? getComputedStyle(summary).gridTemplateColumns.split(' ').length : null,
+    };
+  });
+
+  expect(visualTokens.fontFamily).toContain('JetBrains Mono');
+  expect(visualTokens.background).toBe('rgb(7, 7, 8)');
+  expect(visualTokens.primaryBackground).toBe('#df172c');
+  if ((page.viewportSize()?.width ?? 0) <= 900) expect(visualTokens.summaryColumns).toBe(2);
+  else expect(visualTokens.summaryColumns).toBe(4);
+
+  const summaryFits = await page.locator('.summary-item').evaluateAll(items => items.every(item => {
+    const parent = item.getBoundingClientRect();
+    return [...item.children].every(child => {
+      const box = child.getBoundingClientRect();
+      return box.left >= parent.left && box.right <= parent.right;
+    });
+  }));
+  expect(summaryFits).toBe(true);
 });
 
 test('executes the safe administration controls', async ({ page }, testInfo) => {
@@ -86,4 +140,25 @@ test('keeps administration dialogs inside the mobile viewport', async ({ page },
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   await page.screenshot({ path: testInfo.outputPath('create-pool-mobile.png'), fullPage: true });
+});
+
+test('shows veto actors and choices in the audit history', async ({ page }, testInfo) => {
+  await page.goto('/auditoria');
+
+  await expect(page.getByRole('heading', { name: /auditoria/i })).toBeVisible();
+  await expect(page.locator('.audit-action__badge:visible').filter({ hasText: /^Pick$/ }).first()).toBeVisible();
+  await expect(page.locator('.audit-action__badge:visible').filter({ hasText: /^Ban$/ }).first()).toBeVisible();
+  await expect(page.locator('.audit-actor:visible').filter({ hasText: 'Player One' }).first()).toBeVisible();
+  await expect(page.locator('.audit-actor:visible').filter({ hasText: '329183750129385710' }).first()).toBeVisible();
+  await expect(page.locator('.audit-choice:visible').filter({ hasText: 'Nurse' }).first()).toBeVisible();
+
+  if ((page.viewportSize()?.width ?? 0) <= 1100) {
+    await expect(page.locator('.audit-mobile-list')).toBeVisible();
+    await expect(page.locator('.audit-table')).toBeHidden();
+  } else {
+    await expect(page.locator('.audit-table')).toBeVisible();
+    await expect(page.locator('.audit-mobile-list')).toBeHidden();
+  }
+
+  await page.screenshot({ path: testInfo.outputPath('audit-veto-history.png'), fullPage: true });
 });
