@@ -3,8 +3,8 @@ import {
   ChatInputCommandInteraction,
   EmbedBuilder,
 } from 'discord.js';
-import prisma from '../database/client';
 import { COLORS } from '../config';
+import { reportService } from '../services/report-service';
 
 const DTA_LOGO = 'https://pxdrop.online/raw/d9fv0fmhv1ts73baugmg?file=queens-trials-logo.png';
 
@@ -46,13 +46,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 }
 
 async function handleResumo(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const [totalConfrontos, confrontosAtivos, confrontosEncerrados, jogadores, poolsAtivas] = await Promise.all([
-    prisma.confronto.count({ where: { guildId } }),
-    prisma.confronto.count({ where: { guildId, status: { not: 'encerrado' } } }),
-    prisma.confronto.count({ where: { guildId, status: 'encerrado' } }),
-    prisma.jogador.count({ where: { guildId } }),
-    prisma.pool.count({ where: { guildId, ativa: true } }),
-  ]);
+  const {
+    totalConfrontos,
+    confrontosAtivos,
+    confrontosEncerrados,
+    jogadores,
+    poolsAtivas,
+  } = await reportService.getSummary(guildId);
 
   const embed = baseReportEmbed('RELATORIO — RESUMO')
     .setDescription([
@@ -67,11 +67,7 @@ async function handleResumo(interaction: ChatInputCommandInteraction, guildId: s
 }
 
 async function handleConfrontos(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const confrontos = await prisma.confronto.findMany({
-    where: { guildId },
-    orderBy: { criadoEm: 'desc' },
-    take: 10,
-  });
+  const confrontos = await reportService.listRecentConfrontations(guildId);
 
   const embed = baseReportEmbed('RELATORIO — CONFRONTOS');
 
@@ -94,15 +90,7 @@ async function handleConfrontos(interaction: ChatInputCommandInteraction, guildI
 }
 
 async function handlePools(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const pools = await prisma.pool.findMany({
-    where: { guildId },
-    include: {
-      mapas: true,
-      killers: true,
-      _count: { select: { confrontos: true } },
-    },
-    orderBy: { id: 'asc' },
-  });
+  const pools = await reportService.listPoolReports(guildId);
 
   const embed = baseReportEmbed('RELATORIO — POOLS');
 
@@ -116,9 +104,9 @@ async function handlePools(interaction: ChatInputCommandInteraction, guildId: st
     pools.map(pool => [
       `**${pool.nome}** (ID: ${pool.id}) — ${pool.ativa ? 'Ativa' : 'Inativa'}`,
       `Formato: ${pool.formato}`,
-      `Mapas: ${pool.mapas.length}`,
-      `Killers: ${pool.killers.length}`,
-      `Confrontos: ${pool._count.confrontos}`,
+      `Mapas: ${pool.mapas}`,
+      `Killers: ${pool.killers}`,
+      `Confrontos: ${pool.confrontos}`,
     ].join('\n')).join('\n\n'),
   );
 

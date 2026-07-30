@@ -3,12 +3,14 @@ import {
   ChatInputCommandInteraction,
   TextChannel,
 } from 'discord.js';
-import prisma from '../database/client';
-import { getPoolById, getSetsMaximos, PoolFormato } from '../config';
+import { PoolFormato } from '../config';
 import { createConfrontoEmbed, createErrorEmbed } from '../utils/embeds';
 import { startVeto } from '../systems/veto';
 import { ConfrontoData } from '../types/index';
-import { drawStartingTeam } from '../systems/veto-rules';
+import {
+  confrontationService,
+  ConfrontationServiceError,
+} from '../services/confrontation-service';
 
 export const data = new SlashCommandBuilder()
   .setName('criar-confronto')
@@ -48,64 +50,29 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const textChannel = interaction.channel;
 
-  const poolConfig = await getPoolById(poolId, interaction.guildId!);
-
-  if (!poolConfig) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.')],
-      flags: 64,
-    });
+  let created;
+  try {
+    created = await confrontationService.create(
+      {
+        guildId: interaction.guildId!,
+        poolId,
+        timeARoleId: timeA.id,
+        timeBRoleId: timeB.id,
+        channelId: textChannel.id,
+      },
+      () => interaction.deferReply(),
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof ConfrontationServiceError)) throw error;
+    const message = error.code === 'POOL_NOT_FOUND'
+      ? 'Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.'
+      : error.message;
+    await interaction.reply({ embeds: [createErrorEmbed(message)], flags: 64 });
     return;
   }
 
-  const setsMaximos = getSetsMaximos(poolConfig.formato);
-
-  if (poolConfig.mapas.length !== setsMaximos) {
-    await interaction.reply({
-      embeds: [createErrorEmbed(`A pool ${poolConfig.formato} precisa ter exatamente ${setsMaximos} mapas presetados.`)],
-      flags: 64,
-    });
-    return;
-  }
-
-  if (poolConfig.killers.length <= setsMaximos) {
-    await interaction.reply({
-      embeds: [createErrorEmbed(`A pool precisa ter mais de ${setsMaximos} killers para permitir bans.`)],
-      flags: 64,
-    });
-    return;
-  }
-
-  if (timeA.id === timeB.id) {
-    await interaction.reply({
-      embeds: [createErrorEmbed('Os times devem ser diferentes.')],
-      flags: 64,
-    });
-    return;
-  }
-
-  await interaction.deferReply();
-
-  const primeiroKiller = drawStartingTeam();
-
-  const confronto = await prisma.confronto.create({
-    data: {
-      guildId: interaction.guildId!,
-      poolId,
-      formato: poolConfig.formato,
-      timeARoleId: timeA.id,
-      timeBRoleId: timeB.id,
-      primeiroKiller,
-      status: 'veto',
-    },
-  });
-
-  await prisma.confronto.update({
-    where: { id: confronto.id },
-    data: {
-      channelId: textChannel.id,
-    },
-  });
+  const { poolConfig, ...confronto } = created;
+  const primeiroKiller = confronto.primeiroKiller!;
 
   const confrontoData: ConfrontoData = {
     ...confronto,

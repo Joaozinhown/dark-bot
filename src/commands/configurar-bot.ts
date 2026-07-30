@@ -5,7 +5,7 @@ import {
   Role,
 } from 'discord.js';
 import { createErrorEmbed, createSuccessEmbed } from '../utils/embeds';
-import { getAdminRoleIds, setAdminRoleIds } from '../utils/permissions';
+import { guildPermissionService } from '../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('configurar-bot')
@@ -59,10 +59,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   const role = interaction.options.getRole('cargo', true) as Role;
-  const currentRoleIds = await getAdminRoleIds(guildId);
 
   if (subcommand === 'admin-adicionar') {
-    await setAdminRoleIds(guildId, [...currentRoleIds, role.id]);
+    await guildPermissionService.addAdminRole(guildId, role.id);
     await interaction.reply({
       embeds: [createSuccessEmbed(`Cargo **${role.name}** agora pode usar comandos administrativos do bot.`)],
       flags: 64,
@@ -70,8 +69,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const nextRoleIds = currentRoleIds.filter(roleId => roleId !== role.id);
-  await setAdminRoleIds(guildId, nextRoleIds);
+  await guildPermissionService.removeAdminRole(guildId, role.id);
   await interaction.reply({
     embeds: [createSuccessEmbed(`Cargo **${role.name}** removido da lista administrativa do bot.`)],
     flags: 64,
@@ -79,7 +77,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 }
 
 async function handleListar(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
-  const roleIds = await getAdminRoleIds(guildId);
+  const roleIds = await guildPermissionService.listAdminRoleIds(guildId);
 
   if (roleIds.length === 0) {
     await interaction.reply({
