@@ -1,5 +1,8 @@
 node_modules/
 dist/
+panel/dist/
+panel/test-results/
+panel/playwright-report/
 build/
 discloud/logs/
 .env
