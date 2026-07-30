@@ -8,15 +8,16 @@ datasource db {
 }
 
 model Pool {
-  id        Int      @id @default(autoincrement())
-  guildId   String
-  nome      String
-  formato   String
-  ativa     Boolean  @default(true)
-  criadoEm  DateTime @default(now())
-  mapas     PoolMapa[]
-  killers   PoolKiller[]
+  id         Int          @id @default(autoincrement())
+  guildId    String
+  nome       String
+  formato    String
+  ativa      Boolean      @default(true)
+  criadoEm   DateTime     @default(now())
+  mapas      PoolMapa[]
+  killers    PoolKiller[]
   confrontos Confronto[]
+
   @@unique([id, guildId])
 }
 
@@ -28,77 +29,140 @@ model GuildConfig {
 }
 
 model PoolMapa {
-  id        Int      @id @default(autoincrement())
-  poolId    Int
-  pool      Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  nome      String
-  ordem     Int
+  id     Int    @id @default(autoincrement())
+  poolId Int
+  pool   Pool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  nome   String
+  ordem  Int
 }
 
 model PoolKiller {
-  id        Int      @id @default(autoincrement())
-  poolId    Int
-  pool      Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  nome      String
-  ordem     Int
+  id     Int    @id @default(autoincrement())
+  poolId Int
+  pool   Pool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  nome   String
+  ordem  Int
 }
 
 model Confronto {
-  id          Int      @id @default(autoincrement())
-  guildId     String
-  poolId      Int
-  pool        Pool     @relation(fields: [poolId], references: [id])
-  formato     String
-  timeARoleId String
-  timeBRoleId String
-  timeAVitorias Int    @default(0)
-  timeBVitorias Int    @default(0)
-  status      String   @default("aguardando")
-  currentSet  Int      @default(1)
-  channelId   String?
-  vozTimeAId  String?
-  vozTimeBId  String?
-  vencedor    String?
-  primeiroKiller String?
-  encerradoEm DateTime?
+  id                 Int        @id @default(autoincrement())
+  guildId            String
+  poolId             Int
+  pool               Pool       @relation(fields: [poolId], references: [id])
+  formato            String
+  timeARoleId        String
+  timeBRoleId        String
+  timeAVitorias      Int        @default(0)
+  timeBVitorias      Int        @default(0)
+  status             String     @default("aguardando")
+  currentSet         Int        @default(1)
+  channelId          String?
+  vozTimeAId         String?
+  vozTimeBId         String?
+  vencedor           String?
+  primeiroKiller     String?
+  encerradoEm        DateTime?
   motivoEncerramento String?
-  criadoEm    DateTime @default(now())
-  sets        Set[]
-  vetoState   VetoState?
+  criadoEm           DateTime   @default(now())
+  sets               Set[]
+  vetoState          VetoState?
 }
 
 model Set {
-  id            Int       @id @default(autoincrement())
-  confrontoId   Int
-  confronto     Confronto @relation(fields: [confrontoId], references: [id])
-  numero        Int
-  vencedorTime  String?
-  mapaUsado     String?
-  killerUsado   String?
-  killerTime    String?
-  jogadoEm      DateTime?
+  id           Int       @id @default(autoincrement())
+  confrontoId  Int
+  confronto    Confronto @relation(fields: [confrontoId], references: [id])
+  numero       Int
+  vencedorTime String?
+  mapaUsado    String?
+  killerUsado  String?
+  killerTime   String?
+  jogadoEm     DateTime?
 }
 
 model VetoState {
-  id            Int       @id @default(autoincrement())
-  confrontoId   Int       @unique
-  confronto     Confronto @relation(fields: [confrontoId], references: [id])
-  tipo          String
-  set           Int
-  vezDe         String
-  mapasRestantes String
+  id               Int       @id @default(autoincrement())
+  confrontoId      Int       @unique
+  confronto        Confronto @relation(fields: [confrontoId], references: [id])
+  tipo             String
+  set              Int
+  vezDe            String
+  mapasRestantes   String
   killersRestantes String
-  mapaEscolhido String?
-  killerEscolhido String?
-  messageId     String?
+  mapaEscolhido    String?
+  killerEscolhido  String?
+  messageId        String?
 }
 
 model Jogador {
-  id        String
-  guildId   String
-  nome      String
-  vitorias  Int    @default(0)
+  id         String
+  guildId    String
+  nome       String
+  vitorias   Int    @default(0)
   derrotas   Int    @default(0)
   confrontos Int    @default(0)
+
   @@id([id, guildId])
+}
+
+model WebSession {
+  id                    String    @id @default(cuid())
+  userId                String
+  username              String
+  avatarHash            String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  expiresAt             DateTime
+  csrfTokenHash         String
+  criadoEm              DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
+  ultimoAcessoEm        DateTime  @default(now())
+  revogadoEm            DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  guildId     String
+  actorUserId String
+  action      String
+  entityType  String?
+  entityId    String?
+  details     String   @default("{}")
+  criadoEm    DateTime @default(now())
+
+  @@index([guildId, criadoEm])
+  @@index([actorUserId, criadoEm])
+}
+
+model GuildCommandSetting {
+  id              Int      @id @default(autoincrement())
+  guildId         String
+  commandName     String
+  enabled         Boolean  @default(true)
+  allowedRoleIds  String   @default("[]")
+  updatedByUserId String
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  @@unique([guildId, commandName])
+  @@index([guildId, enabled])
+}
+
+model CustomCommand {
+  id               Int      @id @default(autoincrement())
+  guildId          String
+  name             String
+  description      String
+  responseTemplate String
+  enabled          Boolean  @default(true)
+  allowedRoleIds   String   @default("[]")
+  createdByUserId  String
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @updatedAt
+
+  @@unique([guildId, name])
+  @@index([guildId, enabled])
 }

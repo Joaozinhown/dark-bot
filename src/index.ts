@@ -226,8 +226,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Sincroniza schema do banco (cria tabelas se nao existirem)
-  ensureDatabase();
+  await ensureDatabase();
 
   await connectDiscordWithRetry(token);
 
