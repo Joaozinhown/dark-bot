@@ -106,6 +106,24 @@ test('applies the DTA visual system without shifting the operational HUD', async
   expect(summaryFits).toBe(true);
 });
 
+test('keeps native select options readable in the dark theme', async ({ page }) => {
+  await page.goto('/comandos');
+
+  const sourceFilter = page.locator('.table-toolbar .select-field select');
+  await expect(sourceFilter).toBeVisible();
+  const optionStyles = await sourceFilter.locator('option').evaluateAll(options => options.map(option => {
+    const style = getComputedStyle(option);
+    return { backgroundColor: style.backgroundColor, color: style.color };
+  }));
+
+  expect(optionStyles).toHaveLength(3);
+  expect(optionStyles).toEqual(expect.arrayContaining([
+    { backgroundColor: 'rgb(21, 22, 23)', color: 'rgb(244, 240, 230)' },
+  ]));
+  expect(optionStyles.every(style => style.backgroundColor === 'rgb(21, 22, 23)')).toBe(true);
+  expect(optionStyles.every(style => style.color === 'rgb(244, 240, 230)')).toBe(true);
+});
+
 test('executes the safe administration controls', async ({ page }, testInfo) => {
   test.skip((page.viewportSize()?.width ?? 0) <= 720, 'Desktop administration flow.');
   await page.goto('/comandos');
