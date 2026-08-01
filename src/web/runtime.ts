@@ -44,6 +44,16 @@ import {
 } from './authorization/guild-access';
 import { guildEventBus } from './realtime/event-bus';
 import { PanelActionError, type PanelAction } from './panel-actions';
+import {
+  CustomCommandError,
+  customCommandService,
+} from '../custom-commands/service';
+import { createNativeCommandSources } from '../custom-commands/registry';
+import { scriptAccessService, type ScriptAccessSubject } from '../custom-commands/script-access';
+import { simulateDefinition } from '../custom-commands/executor';
+import { getDiscordToken } from '../utils/env';
+import { syncGuildCommands } from '../startup';
+import { runtimeLogService } from '../services/runtime-log-service';
 
 interface CommandDefinition {
   data?: { toJSON(): { name?: string; description?: string } };
@@ -68,6 +78,7 @@ export interface PanelRuntime {
   getAudit(guildId: string): Promise<unknown[]>;
   getPoolDetails(guildId: string): Promise<unknown[]>;
   getManagement(guildId: string): Promise<unknown>;
+  getLogs(guildId: string): Promise<unknown>;
   executeAction(guildId: string, actorUserId: string, action: PanelAction): Promise<unknown>;
 }
 
@@ -106,7 +117,21 @@ function actionEntityId(action: PanelAction): string | null {
   if ('roleId' in action) return action.roleId;
   if ('commandName' in action) return action.commandName;
   if ('confrontationId' in action) return String(action.confrontationId);
+  if ('commandId' in action && action.commandId !== null) return String(action.commandId);
   return null;
+}
+
+function safeAuditDetails(action: PanelAction): Readonly<Record<string, unknown>> {
+  if (action.type === 'command.save-draft' || action.type === 'command.preview') {
+    return {
+      type: action.type,
+      commandId: 'commandId' in action ? action.commandId : null,
+      commandName: action.definition.command.name.ptBR,
+      executionMode: action.definition.execution.mode,
+      hasScript: customCommandService.containsScript(action.definition),
+    };
+  }
+  return action;
 }
 
 async function fetchLiveGuildMember(guild: Guild, userId: string): Promise<GuildMember> {
@@ -132,6 +157,39 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
     const guild = client.guilds.cache.get(guildId);
     if (!guild) throw new Error('Guild not connected');
     return guild;
+  }
+
+  function nativePayloads(): Record<string, unknown>[] {
+    return [...(client.commands?.values() ?? [])]
+      .map(command => command.data?.toJSON())
+      .filter((payload): payload is Record<string, unknown> => Boolean(payload && typeof payload === 'object'));
+  }
+
+  function nativeSources() {
+    return createNativeCommandSources(nativePayloads());
+  }
+
+  async function syncCommands(guild: Guild): Promise<void> {
+    const token = getDiscordToken();
+    if (!token) throw new PanelActionError('DISCORD_TOKEN_MISSING', 'Token do Discord indisponivel.', 503);
+    await syncGuildCommands(token, guild, nativePayloads());
+  }
+
+  async function scriptSubject(guild: Guild, userId: string): Promise<ScriptAccessSubject> {
+    const member = await fetchLiveGuildMember(guild, userId);
+    return {
+      guildId: guild.id,
+      userId,
+      roleIds: [...member.roles.cache.keys()],
+      isGuildOwner: guild.ownerId === userId,
+      hasManageGuild: member.permissions.has(PermissionFlagsBits.ManageGuild),
+    };
+  }
+
+  async function requireScriptAccess(guild: Guild, userId: string): Promise<void> {
+    if (!(await scriptAccessService.canUseScripts(await scriptSubject(guild, userId)))) {
+      throw new PanelActionError('SCRIPT_ACCESS_DENIED', 'Voce nao possui permissao para editar ou publicar scripts.', 403);
+    }
   }
 
   return {
@@ -198,36 +256,62 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
     },
 
     async getCommands(guildId) {
-      const commands = [...(client.commands?.values() ?? [])]
-        .map(command => command.data?.toJSON())
-        .filter((command): command is { name: string; description?: string } => Boolean(command?.name))
+      const commands = nativePayloads()
+        .filter((command): command is Record<string, unknown> & { name: string; description?: string } => Boolean(command.name))
         .sort((left, right) => left.name.localeCompare(right.name));
       const settings = await createCommandSettingService(
         prismaCommandSettingStore,
         commands.map(command => command.name),
       ).list(guildId);
       const enabledByName = new Map(settings.map(setting => [setting.commandName, setting.enabled]));
-      return commands.map(command => ({
-        name: command.name,
-        description: command.description ?? '',
-        enabled: enabledByName.get(command.name) ?? true,
+      const catalog = await customCommandService.listCatalog(guildId, nativeSources());
+      return catalog.map(command => ({
+        ...command,
+        enabled: command.id === null
+          ? enabledByName.get(command.name) ?? true
+          : command.enabled,
       }));
     },
 
-    getAudit: guildId => auditService.list(guildId),
+    async getAudit(guildId) {
+      const guild = requireGuild(guildId);
+      const entries = await auditService.list(guildId);
+      const actorIds = [...new Set(entries.map(entry => entry.actorUserId))];
+      const actors = new Map<string, { displayName: string; username: string }>();
+      await Promise.all(actorIds.map(async actorId => {
+        const cached = guild.members.cache.get(actorId);
+        const member = cached ?? await guild.members.fetch(actorId).catch(() => null);
+        if (member) actors.set(actorId, { displayName: member.displayName, username: member.user.username });
+      }));
+      return entries.map(entry => ({
+        ...entry,
+        actorDisplayName: actors.get(entry.actorUserId)?.displayName
+          ?? (typeof entry.details.actorDisplayName === 'string' ? entry.details.actorDisplayName : entry.actorUserId),
+        actorUsername: actors.get(entry.actorUserId)?.username
+          ?? (typeof entry.details.actorUsername === 'string' ? entry.details.actorUsername : null),
+      }));
+    },
 
     getPoolDetails: guildId => poolService.listAll(guildId),
 
+    getLogs: async guildId => {
+      requireGuild(guildId);
+      return runtimeLogService.getSnapshot();
+    },
+
     async getManagement(guildId) {
       const guild = requireGuild(guildId);
-      const [roles, channels, adminRoleIds, activeConfrontations] = await Promise.all([
+      const [roles, channels, adminRoleIds, activeConfrontations, scriptAccess] = await Promise.all([
         guild.roles.fetch(),
         guild.channels.fetch(),
         guildPermissionService.listAdminRoleIds(guildId),
         confrontationService.listActive(guildId),
+        scriptAccessService.get(guildId),
       ]);
       return {
         adminRoleIds,
+        scriptRoleIds: scriptAccess.roleIds,
+        scriptUserIds: scriptAccess.userIds,
         activeConfrontations,
         roles: [...roles.values()]
           .filter(role => role.id !== guild.id && !role.managed)
@@ -320,6 +404,16 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
             result = { roleIds: [...new Set(action.roleIds)] };
             break;
           }
+          case 'permission.set-script-access': {
+            const subject = await scriptSubject(guild, actorUserId);
+            if (!scriptAccessService.canManageConfig(subject)) {
+              throw new PanelActionError('SCRIPT_CONFIG_DENIED', 'Somente dono ou Gerenciar Servidor pode alterar acesso a scripts.', 403);
+            }
+            await Promise.all(action.roleIds.map(roleId => requireRole(guild, roleId, false)));
+            await Promise.all(action.userIds.map(userId => guild.members.fetch(userId)));
+            result = await scriptAccessService.set(guildId, action.roleIds, action.userIds, actorUserId);
+            break;
+          }
           case 'command.set-enabled': {
             const commandService = createCommandSettingService(
               prismaCommandSettingStore,
@@ -331,6 +425,104 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
               enabled: action.enabled,
               updatedByUserId: actorUserId,
             });
+            break;
+          }
+          case 'command.save-draft': {
+            const stored = action.commandId === null
+              ? null
+              : await customCommandService.get(guildId, action.commandId);
+            if (customCommandService.containsScript(action.definition)
+              || (stored && customCommandService.containsScript(stored.definition))) {
+              await requireScriptAccess(guild, actorUserId);
+            }
+            result = await customCommandService.saveDraft({
+              guildId,
+              actorUserId,
+              commandId: action.commandId,
+              sourceType: action.sourceType,
+              factoryCommandName: action.factoryCommandName,
+              definition: action.definition,
+              nativeCommands: nativeSources(),
+            });
+            break;
+          }
+          case 'command.preview': {
+            if (customCommandService.containsScript(action.definition)) {
+              await requireScriptAccess(guild, actorUserId);
+            }
+            result = await simulateDefinition(action.definition, {
+              ...action.simulation,
+              userId: actorUserId,
+              guildId,
+              guildName: guild.name,
+            });
+            break;
+          }
+          case 'command.publish': {
+            const command = await customCommandService.get(guildId, action.commandId);
+            if (customCommandService.containsScript(command.definition)) {
+              await requireScriptAccess(guild, actorUserId);
+            }
+            result = await customCommandService.publish(guildId, action.commandId, actorUserId);
+            try {
+              await syncCommands(guild);
+            } catch (error: unknown) {
+              await customCommandService.markSyncError(action.commandId);
+              throw new PanelActionError(
+                'COMMAND_SYNC_FAILED',
+                `Rascunho publicado, mas sincronizacao Discord falhou: ${error instanceof Error ? error.message : String(error)}`,
+                502,
+              );
+            }
+            break;
+          }
+          case 'command.rollback': {
+            const command = await customCommandService.get(guildId, action.commandId);
+            const version = command.versions.find(item => item.id === action.versionId);
+            if (customCommandService.containsScript(command.definition)
+              || (version && customCommandService.containsScript(version.definition))) {
+              await requireScriptAccess(guild, actorUserId);
+            }
+            result = await customCommandService.rollback(guildId, action.commandId, action.versionId, actorUserId);
+            await syncCommands(guild);
+            break;
+          }
+          case 'command.archive': {
+            const command = await customCommandService.get(guildId, action.commandId);
+            if (customCommandService.containsScript(command.definition)) {
+              await requireScriptAccess(guild, actorUserId);
+            }
+            result = await customCommandService.archive(guildId, action.commandId, actorUserId);
+            await syncCommands(guild);
+            break;
+          }
+          case 'command.clone': {
+            const targetGuild = client.guilds.cache.get(action.targetGuildId);
+            if (!targetGuild) {
+              throw new PanelActionError('TARGET_GUILD_NOT_FOUND', 'Servidor de destino nao esta conectado.', 404);
+            }
+            const command = await customCommandService.get(guildId, action.commandId);
+            if (customCommandService.containsScript(command.definition)) {
+              await requireScriptAccess(guild, actorUserId);
+              await requireScriptAccess(targetGuild, actorUserId);
+            }
+            result = await customCommandService.clone(
+              guildId,
+              action.commandId,
+              action.targetGuildId,
+              actorUserId,
+              action.name,
+              nativeSources(),
+            );
+            break;
+          }
+          case 'command.set-dynamic-enabled': {
+            const command = await customCommandService.get(guildId, action.commandId);
+            if (customCommandService.containsScript(command.definition)) {
+              await requireScriptAccess(guild, actorUserId);
+            }
+            result = await customCommandService.setEnabled(guildId, action.commandId, action.enabled, actorUserId);
+            await syncCommands(guild);
             break;
           }
           case 'confrontation.create': {
@@ -399,6 +591,9 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
         if (error instanceof CommandSettingServiceError) {
           throw new PanelActionError(error.code, error.message, 400);
         }
+        if (error instanceof CustomCommandError) {
+          throw new PanelActionError(error.code, error.message, error.statusCode);
+        }
         throw error;
       }
 
@@ -408,7 +603,7 @@ export function createPanelRuntime(client: PanelClient): PanelRuntime {
         action: action.type,
         entityType: action.type.split('.')[0],
         entityId: actionEntityId(action),
-        details: action,
+        details: safeAuditDetails(action),
       });
       guildEventBus.publish(guildId, action.type, { result });
       return result;

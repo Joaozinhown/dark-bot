@@ -3,15 +3,15 @@
 ## Non-negotiable constraints
 
 - Preserve current bot configuration until explicit production cutover approval.
-- Preserve all 11 slash command payloads and behavior.
+- Preserve restorable factory definitions for all 11 native slash commands.
 - Keep bot operational independently from the panel.
 - Never expose `DISCORD_TOKEN`, OAuth tokens or session secrets to browser code.
-- Never execute arbitrary JavaScript submitted through the panel.
+- Execute optional scripts only in the bounded QuickJS sandbox and restricted Discord SDK.
 - Every API route revalidates user, guild and capability server-side.
 
 ## Target architecture
 
-One Node.js process hosts the Discord client, API and built frontend on the Diamond plan.
+One Node.js process hosts the Discord client, API and built frontend on the Platinum plan.
 
 ```text
 Browser
@@ -24,7 +24,7 @@ Browser
 
 Slash command handlers and API controllers must call the same application services. The panel cannot duplicate tournament rules.
 
-The Discloud Diamond deployment uses `TYPE=site`, port `8080`, `0.0.0.0` and a reserved subdomain because the same process exposes a web interface. Backup and rollback remain mandatory.
+The Discloud Platinum deployment uses `TYPE=site`, port `8080`, `0.0.0.0` and a reserved subdomain because the same process exposes a web interface. Backup and rollback remain mandatory.
 
 ## Implementation status
 
@@ -34,11 +34,11 @@ The Discloud Diamond deployment uses `TYPE=site`, port `8080`, `0.0.0.0` and a r
 | Shared services | Complete | Slash handlers and panel runtime share domain services. |
 | Persistence | Complete | Prisma migrations, idempotent presets, sessions, audit and command settings. |
 | OAuth2 and API | Complete | Session, CSRF, rate limit, guild authorization and safe errors. |
-| Panel | Complete | Seven operational views, responsive layout and Playwright coverage. |
+| Panel | Complete | Eight operational views, responsive layout and Playwright coverage. |
 | Administration P0 | Complete | Pools, teams, members, permissions, command toggles and confrontations. |
 | Live operations | Complete for current scope | SSE, reconnect, heartbeat, stream limits and health. |
-| Custom command templates | Deferred | Would require a new interaction contract or Message Content intent. |
-| Diamond deployment | Cutover prepared | `admin-dta-bot` is the target Discloud subdomain; `dta-admin` remains the rollback app until validation. |
+| Dynamic command studio | Complete | PT-BR/en-US, visual/JSON editor, simulation, versions, clone and sandbox. |
+| Platinum deployment | Active | `admin-dta-bot` is the production Discloud subdomain. |
 
 ## Authorization model
 
@@ -52,10 +52,10 @@ Capabilities are evaluated per guild. Initial roles: viewer, operator and admini
 
 ## Command model
 
-- Existing slash commands remain code-defined and protected by contract tests.
-- Panel may enable or disable supported commands per guild without changing payload.
-- Custom commands use safe templates: name, description, response, embed, cooldown and allowed roles.
-- New executable features require code review, tests and deploy.
+- Native slash factories remain code-defined and protected by contract tests.
+- Per-guild overrides may retain the native handler or replace it with a validated workflow.
+- Custom commands support localized payloads, components, conditions, roles, versioning and rollback.
+- Scripts require a separate allowlist and execute in QuickJS without Node.js or network access.
 
 ## Data and persistence
 
@@ -119,24 +119,26 @@ Exit: real data visible only to authorized users; no write actions enabled.
 
 Exit: panel and slash flows produce equivalent results in test guild.
 
-### Phase 6: live operations and future command templates
+### Phase 6: live operations and command studio
 
 - Add per-guild command toggles.
 - Add live veto state, reconnection, health and operational alerts.
 
-Safe response templates remain outside the current release. They cannot become slash commands without changing the frozen command catalog, and text triggers would require an additional Discord intent.
+- Add versioned guild slash commands, visual/JSON editing, simulation and component persistence.
+- Keep global commands empty and preserve native factory restore.
+- Add runtime logs page with official API and process-mirror sources.
 
 Exit: no duplicate commands, cross-guild events or stale orphan registrations.
 
-### Phase 7: Diamond deployment
+### Phase 7: Platinum deployment
 
-- Confirm Diamond subscription and production app ID.
+- Confirm Platinum subscription and production app ID.
 - Create backup and version tag.
 - Change hosting mode only in cutover PR after approval.
 - Bind port 8080 on `0.0.0.0`, configure subdomain and OAuth callback.
 - Deploy, smoke test, monitor and retain rollback package.
 
-Exit: bot ready, panel authenticated, SSE live, 11 slash commands unchanged and logs clean.
+Exit: bot ready, panel authenticated, SSE live, factory commands recoverable and logs clean.
 
 ## Test gates
 

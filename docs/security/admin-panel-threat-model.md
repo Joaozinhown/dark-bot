@@ -12,7 +12,7 @@ Este documento cobre navegador, API Fastify, OAuth2 Discord, sessoes, banco SQLi
 - Sessoes administrativas.
 - Configuracao, pools, cargos, confrontos e resultados por servidor.
 - Historico de auditoria.
-- Integridade dos 11 comandos slash existentes.
+- Integridade das 11 definições nativas e das versões publicadas por servidor.
 
 ## Fronteiras de confianca
 
@@ -59,12 +59,16 @@ Controles implementados:
 - Zod com uniao discriminada para todas as acoes administrativas.
 - IDs Discord validados como snowflakes.
 - nomes, cores, formatos e motivos limitados.
-- comandos aceitos somente quando pertencem ao allowlist carregado pelo bot.
-- nenhuma avaliacao de JavaScript, shell, HTML ou template executavel.
+- definições de comando validadas por schema estrito, profundidade e quantidade total de passos;
+- nomes, localizações e limites do Discord validados antes da publicação;
+- scripts executados em QuickJS descartável com 8 MB, pilha de 512 KB e interrupção em 200 ms;
+- sandbox sem Node.js, rede, sistema de arquivos, `Function`, `eval` ou variáveis de ambiente;
+- ações da sandbox convertidas para workflows e revalidadas antes de executar;
+- permissão de scripts separada da permissão geral do painel;
 - Prisma usa consultas parametrizadas.
 - frontend React nao usa `dangerouslySetInnerHTML`.
 
-Comandos customizados executaveis nao fazem parte desta versao. O modelo `CustomCommand` e apenas uma reserva de schema.
+Risco residual: um script autorizado pode enviar mensagens ou alterar cargos que o próprio bot consiga gerenciar. O allowlist deve conter apenas operadores confiáveis; publicação e execução ficam na auditoria.
 
 ## CSRF, abuso e automacao
 
@@ -94,8 +98,12 @@ Risco residual: o subdominio da Discloud e parte da fronteira de transporte. Alt
 - Erros inesperados retornam somente `INTERNAL_ERROR` e mensagem generica.
 - Erros de dominio usam codigos controlados.
 - Auditoria registra servidor, ator, acao, entidade e detalhes validados.
+- código de scripts e definições completas são redigidos dos detalhes de auditoria.
+- o token pessoal da Discloud nunca é enviado ao navegador; a API devolve apenas texto do terminal.
 
 Risco residual: detalhes de auditoria podem conter nomes e IDs operacionais. A tela e a API de auditoria seguem a mesma autorizacao por servidor.
+
+Risco residual: a Discloud não oferece token limitado somente a logs. Configurar `DISCLOUD_TOKEN` no app concede os poderes da credencial pessoal; o padrão mais seguro é o espelho local de `stdout/stderr`.
 
 ## Disponibilidade e consistencia
 
@@ -129,7 +137,8 @@ Esses riscos nao justificam alterar intents, comandos ou arquitetura no corte at
 - sessao ausente, expirada e revogada;
 - CSRF ausente e incorreto;
 - acesso horizontal a outro servidor;
-- comando fora do allowlist;
+- comando dinâmico de outro servidor ou versão não publicada;
+- timeout, memória e globais proibidos da sandbox;
 - corpo de acao invalido;
 - refresh OAuth concorrente;
 - erro interno sanitizado;

@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="https://ncfnquvxpleeosuuunob.supabase.co/storage/v1/object/public/dbdmaps//logo-01.webp" alt="DTA Logo" width="200"/>
+  <img src="panel/public/dta-symbol.png" alt="DTA Logo" width="160"/>
 </p>
 
 <h1 align="center">Dark Bot</h1>
 
 Bot competitivo da Dark Trials Arena para administrar confrontos 5v5 de Dead by Daylight. O mesmo processo Node.js executa o bot, a API privada e o painel administrativo.
 
-O painel complementa os comandos slash existentes. Ele nao registra, remove nem altera o payload desses comandos.
+O painel administra o bot e também registra comandos slash personalizados por servidor, sem alterar os arquivos dos comandos nativos.
 
 ## Estado atual
 
@@ -19,6 +19,8 @@ O painel complementa os comandos slash existentes. Ele nao registra, remove nem 
 - Painel React responsivo com atualizacao em tempo real por SSE.
 - Login Discord OAuth2 e autorizacao por servidor.
 - Auditoria das acoes administrativas feitas no painel.
+- Studio de Comandos bilíngue, com rascunho, publicação, rollback, clonagem e simulação.
+- Aba de logs com snapshot da API Discloud ou espelho integral do processo.
 
 ## Acesso administrativo
 
@@ -46,7 +48,7 @@ A API repete essa validacao em cada leitura, escrita e conexao SSE. Ocultar um b
 | `/resultado` | Registra o vencedor. |
 | `/setup-cargo` | Cria um cargo de time. |
 
-O painel pode ativar ou desativar cada comando por servidor. O estado padrao continua ativo. Essa configuracao nao altera nome, descricao, opcoes, permissao padrao nem registro no Discord.
+O painel pode ativar, desativar ou sobrescrever cada comando nativo por servidor. Uma sobrescrita pode trocar textos e nomes públicos mantendo o handler original, ou usar um fluxo personalizado. A ação **Restaurar fábrica** remove a sobrescrita e recompõe o payload original protegido pelos testes de contrato.
 
 ## Fluxo do confronto
 
@@ -68,11 +70,21 @@ O painel tem as seguintes areas:
 - Confrontos: criacao em canal existente, resultado e encerramento.
 - Pools: criacao, mapas, killers, ativacao e exclusao.
 - Times: criacao e edicao de cargos, membros e cores.
-- Comandos: ativacao por servidor dos 11 comandos existentes.
+- Comandos: criação e edição visual/JSON, PT-BR/en-US, parâmetros, permissões, fluxos, scripts, simulação, versões e clonagem.
 - Ranking: classificacao calculada a partir dos resultados.
-- Auditoria: autor, acao, entidade e horario.
+- Auditoria: apelido atual do responsável, ação, entidade e horário; o ID aparece somente no tooltip do apelido.
+- Logs: terminal da Discloud quando `DISCLOUD_TOKEN` está configurado, com fallback para o mesmo `stdout/stderr` emitido pelo processo.
 
-Comandos customizados executaveis foram deixados fora desta versao. Criar novos slash commands mudaria o contrato atual, e comandos de texto exigiriam intent adicional. O modelo de dados reserva essa evolucao, mas nenhuma entrada enviada pelo painel executa JavaScript.
+## Studio de Comandos
+
+Cada servidor possui catálogo independente. O fluxo recomendado é:
+
+1. Criar ou editar um comando e salvar o rascunho.
+2. Simular o fluxo sem enviar mensagens ao Discord.
+3. Publicar; o bot recompõe os comandos daquele servidor por `bulk overwrite`.
+4. Usar rollback para publicar novamente uma versão anterior.
+
+O editor visual cobre metadados, localização, parâmetros, permissões, mensagens e passos comuns. O JSON avançado expõe toda a definição validada para subcomandos, grupos, embeds, botões, seleções, modais, condições, sorteios, cargos e scripts. Scripts rodam em QuickJS isolado, com 8 MB de memória, 200 ms de CPU, sem Node.js, rede, sistema de arquivos, `eval` ou segredos. A SDK disponível limita ações a Discord e variáveis validadas. Permissão de painel e permissão para scripts são controles separados.
 
 ## Arquitetura
 
@@ -103,7 +115,7 @@ Responsabilidades principais:
 - Node.js 22 ou superior.
 - Aplicacao Discord com bot configurado.
 - SQLite local ou volume persistente na hospedagem.
-- Discloud Diamond para publicar o painel em subdominio proprio da plataforma.
+- Discloud Platinum para publicar o painel no subdomínio da plataforma.
 
 ## Instalacao local
 
@@ -160,6 +172,8 @@ Nao publique a saida desse comando e nao a adicione ao Git.
 | `PANEL_ENCRYPTION_KEY` | Painel | Exatamente 32 bytes em Base64. |
 | `PORT` | Hospedagem | Porta HTTP; na Discloud deve ser `8080`. |
 | `NODE_ENV` | Nao | Use `production` no deploy publico. |
+| `DISCLOUD_APP_ID` | Logs | ID do app consultado; padrão lido de `discloud.config`. |
+| `DISCLOUD_TOKEN` | Logs exatos | Token pessoal usado somente pelo backend para `GET /app/:id/logs`. Sem ele, usa o espelho local. |
 
 As variaveis existentes do bot nao precisam ser alteradas para desenvolver ou testar o painel desativado.
 
@@ -191,7 +205,7 @@ npm audit --omit=dev
 
 O teste `src/tests/commands-contract.test.ts` deve continuar aprovando os 11 payloads. Qualquer mudanca nesse contrato exige uma decisao separada.
 
-## Deploy na Discloud Diamond
+## Deploy na Discloud Platinum
 
 Bot com interface web e classificado pela Discloud como site. O corte de producao requer:
 
@@ -211,6 +225,7 @@ O procedimento completo, validacao e rollback estao em [docs/operations/admin-pa
 - Escritas exigem CSRF de dupla submissao e validacao Zod estrita.
 - Rate limit global e limite menor nas acoes administrativas.
 - Logs removem cookies, cabecalho Authorization e `Set-Cookie`.
+- Definições são validadas por Zod e scripts executam em QuickJS com limites de CPU/memória.
 - Erros inesperados retornam mensagem generica ao navegador.
 
 O modelo de ameacas e os controles estao em [docs/security/admin-panel-threat-model.md](docs/security/admin-panel-threat-model.md).
@@ -218,6 +233,7 @@ O modelo de ameacas e os controles estao em [docs/security/admin-panel-threat-mo
 ## Documentacao
 
 - [Plano de implementacao](docs/architecture/admin-panel-implementation.md)
+- [Studio de Comandos](docs/architecture/dynamic-command-studio.md)
 - [Runbook Discloud](docs/operations/admin-panel-discloud-runbook.md)
 - [Modelo de ameacas](docs/security/admin-panel-threat-model.md)
 - [Produto](PRODUCT.md)

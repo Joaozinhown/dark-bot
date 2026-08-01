@@ -1,12 +1,12 @@
-# Runbook do painel na Discloud Diamond
+# Runbook do painel na Discloud Platinum
 
 ## Objetivo
 
 Publicar bot, API e painel no mesmo processo Node.js, sem alterar os 11 payloads slash e sem executar uma segunda instancia concorrente do bot.
 
-Estado verificado em 29 de julho de 2026:
+Estado de produção:
 
-- conta Discloud no plano Diamond;
+- conta Discloud no plano Platinum;
 - 4096 MB totais e 1024 MB alocados;
 - site atual `dta-admin` online com 512 MB e `AUTORESTART=true`;
 - app anterior `1785101572014` offline, mantido somente para rollback imediato;
@@ -74,6 +74,13 @@ NODE_ENV=production
 ```
 
 Mantenha sem alteracao os valores atuais de `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID` e `DATABASE_URL`.
+
+Para a aba **Logs**, prefira o espelho padrão de `stdout/stderr`. `DISCLOUD_TOKEN` habilita o snapshot exato de `GET /v2/app/admin-dta-bot/logs`, mas é uma credencial pessoal sem escopo somente-leitura. Só a configure se esse risco for aceito e mantenha-a exclusivamente no `.env` ignorado:
+
+```env
+DISCLOUD_APP_ID=admin-dta-bot
+# DISCLOUD_TOKEN=<token-pessoal-opcional>
+```
 
 ## 4. Fazer backup
 
@@ -163,7 +170,7 @@ npm run deploy:cutover -- --execute
 
 O comando para `dta-admin`, confirma o estado offline, baixa um backup congelado da Discloud, valida o SQLite com `PRAGMA integrity_check`, prepara o pacote temporario, compara o SHA-256 dos bancos, envia `admin-dta-bot` e aguarda `/health` com `botReady: true` e `commandCount: 11`. Todos os processos da CLI e requisicoes HTTP possuem timeout. Se uma etapa falhar antes do upload, ele confirma que o alvo esta ausente e reativa `dta-admin`. Depois de um upload iniciado, o alvo existente recebe uma parada manual e um backup de recuperacao antes do rollback. Se a criacao ainda aparecer como `missing`, a origem permanece offline para inspecao, evitando duas instancias com o mesmo token. O staging com `.env` e banco e apagado no final; os backups permanecem em `discloud/backups/`, ignorados pelo Git.
 
-Atualizacoes posteriores usam `discloud app commit admin-dta-bot` em vez de `app upload`.
+Atualizações posteriores usam o staging seguro e `discloud app commit admin-dta-bot` em vez de criar outro app. O startup aplica a migração do Studio antes de abrir o bot.
 
 ## 8. Smoke test
 
@@ -193,7 +200,7 @@ Validar no navegador:
 1. Abrir a URL publica.
 2. Entrar com Discord.
 3. Ver somente servidores autorizados.
-4. Abrir confrontos, pools, times, comandos, ranking e auditoria.
+4. Abrir confrontos, pools, times, comandos, ranking, auditoria e logs.
 5. Confirmar SSE atualizando uma tela apos uma acao em servidor de teste.
 6. Sair e confirmar que a sessao foi revogada.
 
@@ -203,6 +210,8 @@ Validar no Discord:
 2. Um comando desativado responde com o bloqueio esperado.
 3. Um comando ativo continua com o comportamento anterior.
 4. Criar confronto usa o canal existente e nao cria texto ou voz.
+5. Criar um comando de teste, simular, publicar e confirmar que aparece uma única vez.
+6. Restaurar uma sobrescrita nativa e confirmar o payload de fábrica.
 
 ## 9. Monitoramento inicial
 

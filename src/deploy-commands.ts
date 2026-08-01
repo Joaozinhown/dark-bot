@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { getDiscordToken, getDiscordTokenValidationError } from './utils/env';
+import { buildGuildCommandPayloads } from './custom-commands/registry';
+import prisma from './database/client';
 
 dotenv.config();
 
@@ -45,18 +47,23 @@ async function deployCommands() {
     }
 
     const rest = new REST({ version: '10' }).setToken(token);
+    const body = commandScope === 'guild'
+      ? (await buildGuildCommandPayloads(guildId!, commands)).payloads
+      : commands;
     const route = commandScope === 'guild'
       ? Routes.applicationGuildCommands(clientId, guildId!)
       : Routes.applicationCommands(clientId);
 
     await rest.put(route, {
-      body: commands,
+      body,
     });
 
-    console.log(`[Deploy] ${commands.length} comandos ${commandScope === 'guild' ? 'do servidor' : 'globais'} registrados com sucesso!`);
+    console.log(`[Deploy] ${body.length} comandos ${commandScope === 'guild' ? 'do servidor' : 'globais'} registrados com sucesso!`);
   } catch (error) {
     console.error('[Deploy] Erro ao registrar comandos:', error);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

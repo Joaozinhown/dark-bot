@@ -12,6 +12,7 @@ import type {
   Session,
   Team,
   ManagementData,
+  RuntimeLogSnapshot,
 } from '../types/api';
 
 const now = Date.now();
@@ -119,18 +120,50 @@ export const mockRanking: RankingEntry[] = [
   { nome: 'Night Shift', vitorias: 3, derrotas: 9 },
 ];
 
+function mockNativeCommand(name: string, description: string): Command {
+  return {
+    id: null,
+    stableKey: `native:${name}`,
+    sourceType: 'native',
+    factoryCommandName: name,
+    name,
+    description,
+    definition: {
+      schemaVersion: 1,
+      execution: { mode: 'native', factoryCommandName: name },
+      command: {
+        name: { ptBR: name, enUS: name },
+        description: { ptBR: description, enUS: description },
+        options: [],
+        defaultMemberPermissions: null,
+        nsfw: false,
+      },
+      permissions: { requireBotAdmin: false, allowedRoleIds: [], allowedUserIds: [], cooldownSeconds: 0 },
+      workflow: [],
+    },
+    enabled: true,
+    status: 'factory',
+    publishedVersionId: null,
+    discordCommandId: null,
+    hasUnpublishedChanges: false,
+    versions: [],
+    criadoEm: null,
+    atualizadoEm: null,
+  };
+}
+
 export const mockCommands: Command[] = [
-  { name: 'configurar-bot', description: 'Configura permissões e parâmetros do bot' },
-  { name: 'criar-confronto', description: 'Inicia um confronto no canal atual' },
-  { name: 'encerrar', description: 'Encerra um confronto ativo' },
-  { name: 'gerenciar-cargo', description: 'Gerencia cargos administrativos' },
-  { name: 'gerenciar-pool', description: 'Consulta e gerencia pools competitivas' },
-  { name: 'listar-confrontos', description: 'Lista confrontos recentes e ativos' },
-  { name: 'perfil', description: 'Mostra o perfil competitivo de um jogador' },
-  { name: 'ranking', description: 'Mostra a classificação por equipe' },
-  { name: 'relatorios', description: 'Exibe relatórios do campeonato' },
-  { name: 'resultado', description: 'Registra o resultado de um set' },
-  { name: 'setup-cargo', description: 'Cria a estrutura inicial de cargos' },
+  mockNativeCommand('configurar-bot', 'Configura permissões e parâmetros do bot'),
+  mockNativeCommand('criar-confronto', 'Inicia um confronto no canal atual'),
+  mockNativeCommand('encerrar', 'Encerra um confronto ativo'),
+  mockNativeCommand('gerenciar-cargo', 'Gerencia cargos administrativos'),
+  mockNativeCommand('gerenciar-pool', 'Consulta e gerencia pools competitivas'),
+  mockNativeCommand('listar-confrontos', 'Lista confrontos recentes e ativos'),
+  mockNativeCommand('perfil', 'Mostra o perfil competitivo de um jogador'),
+  mockNativeCommand('ranking', 'Mostra a classificação por equipe'),
+  mockNativeCommand('relatorios', 'Exibe relatórios do campeonato'),
+  mockNativeCommand('resultado', 'Registra o resultado de um set'),
+  mockNativeCommand('setup-cargo', 'Cria a estrutura inicial de cargos'),
 ];
 
 export const mockAudit: AuditEntry[] = [
@@ -138,6 +171,8 @@ export const mockAudit: AuditEntry[] = [
     id: 38,
     guildId: mockGuilds[0]!.id,
     actorUserId: '329183750129385710',
+    actorDisplayName: 'Player One',
+    actorUsername: 'player.one',
     action: 'veto.pick',
     entityType: 'confrontation',
     entityId: '185',
@@ -159,6 +194,8 @@ export const mockAudit: AuditEntry[] = [
     id: 37,
     guildId: mockGuilds[0]!.id,
     actorUserId: '481902374650129384',
+    actorDisplayName: 'Rival Captain',
+    actorUsername: 'rival.captain',
     action: 'veto.ban',
     entityType: 'confrontation',
     entityId: '185',
@@ -180,6 +217,8 @@ export const mockAudit: AuditEntry[] = [
     id: 36,
     guildId: mockGuilds[0]!.id,
     actorUserId: mockSession.userId,
+    actorDisplayName: 'Matheus',
+    actorUsername: 'matheus.dta',
     action: 'confrontation.closed',
     entityType: 'confrontation',
     entityId: '183',
@@ -190,6 +229,8 @@ export const mockAudit: AuditEntry[] = [
     id: 35,
     guildId: mockGuilds[0]!.id,
     actorUserId: '329183750129385710',
+    actorDisplayName: 'Player One',
+    actorUsername: 'player.one',
     action: 'result.recorded',
     entityType: 'set',
     entityId: '183-4',
@@ -200,6 +241,8 @@ export const mockAudit: AuditEntry[] = [
     id: 34,
     guildId: mockGuilds[0]!.id,
     actorUserId: mockSession.userId,
+    actorDisplayName: 'Matheus',
+    actorUsername: 'matheus.dta',
     action: 'pool.activated',
     entityType: 'pool',
     entityId: '3',
@@ -210,6 +253,8 @@ export const mockAudit: AuditEntry[] = [
     id: 33,
     guildId: mockGuilds[0]!.id,
     actorUserId: '329183750129385710',
+    actorDisplayName: 'Player One',
+    actorUsername: 'player.one',
     action: 'role.permission.granted',
     entityType: 'role',
     entityId: 'staff-role',
@@ -258,10 +303,19 @@ export const mockPoolDetails: PoolDetail[] = mockPools.map((pool, poolIndex) => 
 
 export const mockManagement: ManagementData = {
   adminRoleIds: [mockTeams[0]!.id],
+  scriptRoleIds: [mockTeams[0]!.id],
+  scriptUserIds: [mockSession.userId],
   roles: mockTeams.map(team => ({ ...team, editable: true })),
   channels: [
     { id: '1352013816543100938', name: 'confronto-01' },
     { id: '1352013816543100939', name: 'confronto-02' },
   ],
   activeConfrontations,
+};
+
+export const mockLogs: RuntimeLogSnapshot = {
+  source: 'runtime',
+  isExactDiscloudSnapshot: false,
+  fetchedAt: new Date().toISOString(),
+  content: '[DTA] Migrações aplicadas.\n[DTA] Bot online.\n[DTA] 11 comandos sincronizados.\n[DTA] Painel disponível na porta 8080.',
 };

@@ -27,7 +27,7 @@ const STATE_TTL_SECONDS = 10 * 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_SSE_CONNECTIONS_PER_SESSION_GUILD = 3;
 const MAX_SSE_CONNECTIONS_TOTAL = 100;
-const REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
+const REQUEST_BODY_LIMIT_BYTES = 512 * 1024;
 const OAUTH_GUILD_CACHE_TTL_MS = 30_000;
 
 export interface OAuthClientContract {
@@ -421,6 +421,7 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     ['audit', guildId => options.runtime.getAudit(guildId)],
     ['pool-details', guildId => options.runtime.getPoolDetails(guildId)],
     ['management', guildId => options.runtime.getManagement(guildId)],
+    ['logs', guildId => options.runtime.getLogs(guildId)],
   ];
   for (const [resource, load] of guildReads) {
     app.get<{ Params: { guildId: string } }>(`/api/guilds/:guildId/${resource}`, async (request, reply) => {
@@ -437,6 +438,10 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
     const parsed = panelActionSchema.safeParse(request.body);
     if (!parsed.success) {
       return sendError(reply, 400, 'VALIDATION_ERROR', 'Dados da acao invalidos.');
+    }
+    if (parsed.data.type === 'command.clone'
+      && !(await options.runtime.hasGuildAccess(access.auth.session.userId, parsed.data.targetGuildId))) {
+      return sendError(reply, 403, 'TARGET_GUILD_FORBIDDEN', 'Acesso ao servidor de destino negado.');
     }
     const result = await options.runtime.executeAction(
       access.guildId,

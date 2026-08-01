@@ -149,7 +149,9 @@ test('shows veto actors and choices in the audit history', async ({ page }, test
   await expect(page.locator('.audit-action__badge:visible').filter({ hasText: /^Pick$/ }).first()).toBeVisible();
   await expect(page.locator('.audit-action__badge:visible').filter({ hasText: /^Ban$/ }).first()).toBeVisible();
   await expect(page.locator('.audit-actor:visible').filter({ hasText: 'Player One' }).first()).toBeVisible();
-  await expect(page.locator('.audit-actor:visible').filter({ hasText: '329183750129385710' }).first()).toBeVisible();
+  const actor = page.locator('.audit-actor:visible').filter({ hasText: 'Player One' }).first();
+  await expect(actor).toHaveAttribute('title', 'ID: 329183750129385710');
+  await expect(actor).not.toContainText('329183750129385710');
   await expect(page.locator('.audit-choice:visible').filter({ hasText: 'Nurse' }).first()).toBeVisible();
 
   if ((page.viewportSize()?.width ?? 0) <= 1100) {
@@ -161,4 +163,56 @@ test('shows veto actors and choices in the audit history', async ({ page }, test
   }
 
   await page.screenshot({ path: testInfo.outputPath('audit-veto-history.png'), fullPage: true });
+});
+
+test('keeps the command studio usable on mobile', async ({ page }, testInfo) => {
+  test.skip((page.viewportSize()?.width ?? 0) > 720, 'Mobile command studio flow.');
+  await page.goto('/comandos');
+  await page.getByRole('button', { name: /novo comando/i }).click();
+  const dialog = page.getByRole('dialog', { name: /novo comando slash/i });
+  await expect(dialog).toBeVisible();
+  const fits = await dialog.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    return box.left >= 0 && box.right <= document.documentElement.clientWidth;
+  });
+  expect(fits).toBe(true);
+  for (const button of await dialog.locator('.command-editor__actions .button').all()) {
+    const box = await button.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
+  await page.screenshot({ path: testInfo.outputPath('command-studio-mobile.png'), fullPage: true });
+});
+
+test('creates, simulates and publishes a bilingual slash command', async ({ page }, testInfo) => {
+  test.skip((page.viewportSize()?.width ?? 0) <= 720, 'Desktop command studio flow.');
+  await page.goto('/comandos');
+  await page.getByRole('button', { name: /novo comando/i }).click();
+  const dialog = page.getByRole('dialog', { name: /novo comando slash/i });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Nome PT-BR').fill('aviso');
+  await dialog.getByLabel('Name English').fill('notice');
+  await dialog.getByLabel('Descrição PT-BR').fill('Envia um aviso configurável');
+  await dialog.getByLabel('Description English').fill('Sends a configurable notice');
+  await dialog.getByLabel('Texto PT-BR').fill('Olá, {{user.username}}');
+  await dialog.getByLabel('Texto English').fill('Hello, {{user.username}}');
+  await dialog.getByRole('button', { name: /simular/i }).click();
+  await expect(dialog.getByText(/resultado da simulação/i)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('command-studio.png'), fullPage: true });
+  await dialog.getByRole('button', { name: /salvar e publicar/i }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('/aviso publicado no Discord.')).toBeVisible();
+});
+
+test('shows live logs and keeps the guild selector in the dark visual system', async ({ page }, testInfo) => {
+  await page.goto('/logs');
+  await expect(page.getByRole('heading', { name: 'Logs' })).toBeVisible();
+  await expect(page.locator('.logs-console pre')).toContainText('Bot online');
+  const selectorStyle = await page.locator('.guild-selector select').first().evaluate(select => ({
+    colorScheme: getComputedStyle(select).colorScheme,
+    color: getComputedStyle(select).color,
+  }));
+  expect(selectorStyle.colorScheme).toBe('dark');
+  expect(selectorStyle.color).toBe('rgb(244, 240, 230)');
+  await page.screenshot({ path: testInfo.outputPath('logs.png'), fullPage: true });
 });

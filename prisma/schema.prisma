@@ -22,10 +22,13 @@ model Pool {
 }
 
 model GuildConfig {
-  guildId      String   @id
-  adminRoleIds String   @default("[]")
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  guildId           String   @id
+  adminRoleIds      String   @default("[]")
+  scriptRoleIds     String   @default("[]")
+  scriptUserIds     String   @default("[]")
+  scriptAccessById  String?
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
 }
 
 model PoolMapa {
@@ -152,17 +155,59 @@ model GuildCommandSetting {
 }
 
 model CustomCommand {
-  id               Int      @id @default(autoincrement())
-  guildId          String
-  name             String
-  description      String
-  responseTemplate String
-  enabled          Boolean  @default(true)
-  allowedRoleIds   String   @default("[]")
-  createdByUserId  String
-  criadoEm         DateTime @default(now())
-  atualizadoEm     DateTime @updatedAt
+  id                 Int                        @id @default(autoincrement())
+  guildId            String
+  stableKey          String
+  sourceType         String                     @default("custom")
+  factoryCommandName String?
+  name               String
+  description        String
+  draftDefinition    String
+  enabled            Boolean                    @default(true)
+  status             String                     @default("draft")
+  publishedVersionId Int?
+  discordCommandId   String?
+  createdByUserId    String
+  updatedByUserId    String
+  criadoEm           DateTime                   @default(now())
+  atualizadoEm       DateTime                   @updatedAt
+  versions           CustomCommandVersion[]
+  interactions       CustomCommandInteraction[]
 
+  @@unique([guildId, stableKey])
   @@unique([guildId, name])
   @@index([guildId, enabled])
+  @@index([guildId, discordCommandId])
+}
+
+model CustomCommandVersion {
+  id             Int                        @id @default(autoincrement())
+  commandId      Int
+  command        CustomCommand              @relation(fields: [commandId], references: [id], onDelete: Cascade)
+  version        Int
+  definition     String
+  publishedById String
+  criadoEm       DateTime                   @default(now())
+  interactions   CustomCommandInteraction[]
+
+  @@unique([commandId, version])
+  @@index([commandId, criadoEm])
+}
+
+model CustomCommandInteraction {
+  token            String               @id
+  guildId          String
+  commandId        Int
+  command          CustomCommand        @relation(fields: [commandId], references: [id], onDelete: Cascade)
+  commandVersionId Int
+  commandVersion   CustomCommandVersion @relation(fields: [commandVersionId], references: [id], onDelete: Cascade)
+  nodeId           String
+  contextJson      String               @default("{}")
+  allowedUserId    String?
+  expiresAt        DateTime
+  consumedAt       DateTime?
+  criadoEm         DateTime             @default(now())
+
+  @@index([guildId, expiresAt])
+  @@index([commandVersionId])
 }

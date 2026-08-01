@@ -105,7 +105,8 @@ function createDependencies() {
     async getCommands() { return []; },
     async getAudit() { return []; },
     async getPoolDetails() { return []; },
-    async getManagement() { return { roles: [], channels: [], adminRoleIds: [] }; },
+    async getManagement() { return { roles: [], channels: [], adminRoleIds: [], scriptRoleIds: [], scriptUserIds: [], activeConfrontations: [] }; },
+    async getLogs() { return { source: 'runtime', content: 'Bot online', fetchedAt: new Date().toISOString(), isExactDiscloudSnapshot: false }; },
     async executeAction(guildId, actorUserId, action) { return { guildId, actorUserId, action }; },
   };
   return { oauth, sessions, runtime };

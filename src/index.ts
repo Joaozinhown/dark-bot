@@ -5,6 +5,7 @@ import {
   Collection,
   ChatInputCommandInteraction,
   GuildMember,
+  MessageFlags,
 } from 'discord.js';
 import dotenv from 'dotenv';
 import http from 'http';
@@ -31,6 +32,15 @@ import { createPanelRuntime } from './web/runtime';
 import { createWebApp } from './web/server';
 import { guildEventBus } from './web/realtime/event-bus';
 import { readPanelConfigSafely, runPanelBeforeBot } from './web/startup';
+import { auditService } from './services/audit-service';
+import { customCommandService } from './custom-commands/service';
+import {
+  adaptInteractionForNativeHandler,
+  canExecuteDynamicCommand,
+  executeDynamicCommand,
+  handleDynamicComponent,
+} from './custom-commands/executor';
+import { ADMIN_COMMAND_NAMES } from './custom-commands/registry';
 
 dotenv.config();
 
@@ -53,16 +63,6 @@ const client = new Client({
 }) as Client & ClientCommands;
 
 client.commands = new Collection<string, CommandModule>();
-
-const ADMIN_COMMANDS = new Set([
-  'criar-confronto',
-  'encerrar',
-  'gerenciar-cargo',
-  'gerenciar-pool',
-  'relatorios',
-  'resultado',
-  'setup-cargo',
-]);
 
 let commandPayloads: unknown[] = [];
 
@@ -185,15 +185,66 @@ async function connectDiscordWithRetry(token: string): Promise<void> {
 }
 
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = client.commands.get(interaction.commandName);
-  if (!command) {
-    console.error(`[Commands] Comando nao encontrado: ${interaction.commandName}`);
-    return;
-  }
-
   try {
+    if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+      if (await handleDynamicComponent(interaction)) return;
+      return;
+    }
+    if (!interaction.isChatInputCommand()) return;
+
+    const dynamic = interaction.guildId
+      ? await customCommandService.findPublishedByDiscordId(interaction.guildId, interaction.commandId)
+      : null;
+    const factoryName = dynamic?.definition.execution.factoryCommandName ?? interaction.commandName;
+    const command = client.commands.get(factoryName);
+
+    if (dynamic) {
+      const permission = await canExecuteDynamicCommand(interaction, dynamic.definition, dynamic.command.id);
+      if (!permission.allowed) {
+        await interaction.reply({
+          embeds: [createErrorEmbed(permission.message)],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      if (dynamic.definition.execution.mode === 'native') {
+        if (!command) throw new Error(`Handler nativo nao encontrado: ${factoryName}`);
+        await command.execute(adaptInteractionForNativeHandler(interaction, dynamic.definition, factoryName));
+      } else {
+        await executeDynamicCommand(interaction, {
+          commandId: dynamic.command.id,
+          versionId: dynamic.version.id,
+          definition: dynamic.definition,
+        });
+      }
+      await auditService.write({
+        guildId: interaction.guildId!,
+        actorUserId: interaction.user.id,
+        action: 'command.executed',
+        entityType: 'command',
+        entityId: String(dynamic.command.id),
+        details: {
+          commandName: dynamic.definition.command.name.ptBR,
+          version: dynamic.version.version,
+          executionMode: dynamic.definition.execution.mode,
+          actorDisplayName: interaction.member instanceof GuildMember ? interaction.member.displayName : interaction.user.globalName,
+          actorUsername: interaction.user.username,
+        },
+      });
+      guildEventBus.publish(interaction.guildId!, 'command.executed', {
+        commandName: dynamic.definition.command.name.ptBR,
+        commandId: dynamic.command.id,
+        dynamic: true,
+      });
+      return;
+    }
+
+    if (!command) {
+      console.error(`[Commands] Comando nao encontrado: ${interaction.commandName}`);
+      await interaction.reply({ content: 'Este comando nao esta disponivel.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
     if (interaction.guildId) {
       const commandSettings = createCommandSettingService(
         prismaCommandSettingStore,
@@ -208,7 +259,7 @@ client.on(Events.InteractionCreate, async interaction => {
       }
     }
 
-    if (ADMIN_COMMANDS.has(interaction.commandName)) {
+    if (ADMIN_COMMAND_NAMES.has(interaction.commandName)) {
       const member = interaction.member instanceof GuildMember ? interaction.member : null;
       const canUseCommand = member ? await hasBotAdminPermission(member) : false;
 
@@ -223,18 +274,35 @@ client.on(Events.InteractionCreate, async interaction => {
 
     await command.execute(interaction);
     if (interaction.guildId) {
+      await auditService.write({
+        guildId: interaction.guildId,
+        actorUserId: interaction.user.id,
+        action: 'command.executed',
+        entityType: 'command',
+        entityId: interaction.commandName,
+        details: {
+          commandName: interaction.commandName,
+          executionMode: 'factory',
+          actorDisplayName: interaction.member instanceof GuildMember ? interaction.member.displayName : interaction.user.globalName,
+          actorUsername: interaction.user.username,
+        },
+      });
       guildEventBus.publish(interaction.guildId, 'command.executed', {
         commandName: interaction.commandName,
       });
     }
   } catch (error) {
-    console.error(`[Commands] Erro ao executar ${interaction.commandName}:`, error);
+    const interactionName = interaction.isChatInputCommand()
+      ? interaction.commandName
+      : 'customId' in interaction ? interaction.customId : interaction.id;
+    console.error(`[Commands] Erro ao executar ${interactionName}:`, error);
 
     const reply = {
       content: 'Ocorreu um erro ao executar este comando.',
       flags: 64,
     };
 
+    if (!interaction.isRepliable()) return;
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(reply);
     } else {

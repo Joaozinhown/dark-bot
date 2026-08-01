@@ -124,6 +124,17 @@ export function useManagement(guildId: string) {
   });
 }
 
+export function useLogs(guildId: string, isLive = true) {
+  return useQuery({
+    queryKey: queryKeys.guild(guildId, 'logs'),
+    queryFn: () => panelApi.logs(guildId),
+    enabled: Boolean(guildId),
+    staleTime: 4_000,
+    refetchInterval: isLive ? 5_000 : false,
+    retry: 1,
+  });
+}
+
 export function usePanelAction(guildId: string) {
   const queryClient = useQueryClient();
   return useMutation({

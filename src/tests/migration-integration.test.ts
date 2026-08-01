@@ -46,7 +46,7 @@ test('deploys migrations on fresh and legacy databases without losing pool data'
     runMigrations(url, backupDirectory);
 
     const freshTables = await listTables(client);
-    for (const table of ['Pool', 'WebSession', 'AuditLog', 'GuildCommandSetting', 'CustomCommand']) {
+    for (const table of ['Pool', 'WebSession', 'AuditLog', 'GuildCommandSetting', 'CustomCommand', 'CustomCommandVersion', 'CustomCommandInteraction']) {
       assert.equal(freshTables.includes(table), true, `missing fresh table ${table}`);
     }
 
@@ -111,7 +111,7 @@ test('deploys migrations on fresh and legacy databases without losing pool data'
       assert.deepEqual(preserved.killers.map(item => item.nome), ['Killer preservado']);
 
       const migratedTables = await listTables(migrated);
-      for (const table of ['GuildConfig', 'WebSession', 'AuditLog', 'GuildCommandSetting', 'CustomCommand']) {
+      for (const table of ['GuildConfig', 'WebSession', 'AuditLog', 'GuildCommandSetting', 'CustomCommand', 'CustomCommandVersion', 'CustomCommandInteraction']) {
         assert.equal(migratedTables.includes(table), true, `missing migrated table ${table}`);
       }
       const playerColumns = await migrated.$queryRawUnsafe<Array<{ name: string; pk: bigint | number }>>(

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { panelActionSchema } from './panel-actions';
+import { createBlankCommandDefinition } from '../custom-commands/definition';
 
 const ROLE_ID = '123456789012345678';
 
@@ -35,7 +36,7 @@ test('rejects malformed Discord ids, colors and unbounded text', () => {
   }));
 });
 
-test('limits command actions to activation of existing names', () => {
+test('accepts static activation and validated dynamic command drafts', () => {
   assert.deepEqual(panelActionSchema.parse({
     type: 'command.set-enabled',
     commandName: 'criar-confronto',
@@ -49,5 +50,33 @@ test('limits command actions to activation of existing names', () => {
     type: 'command.set-enabled',
     commandName: 'Bad Command',
     enabled: true,
+  }));
+  const definition = createBlankCommandDefinition('hello');
+  const draft = panelActionSchema.parse({
+    type: 'command.save-draft',
+    commandId: null,
+    sourceType: 'custom',
+    factoryCommandName: null,
+    definition,
+  });
+  assert.equal(draft.type, 'command.save-draft');
+  assert.equal(draft.definition.command.name.enUS, 'hello');
+  assert.throws(() => panelActionSchema.parse({
+    type: 'command.preview',
+    definition: { ...definition, workflow: [] },
+  }));
+});
+
+test('validates separate role and user access for scripts', () => {
+  const parsed = panelActionSchema.parse({
+    type: 'permission.set-script-access',
+    roleIds: [ROLE_ID],
+    userIds: ['223456789012345678'],
+  });
+  assert.equal(parsed.type, 'permission.set-script-access');
+  assert.throws(() => panelActionSchema.parse({
+    type: 'permission.set-script-access',
+    roleIds: ['not-a-role'],
+    userIds: [],
   }));
 });

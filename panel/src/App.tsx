@@ -9,6 +9,7 @@ import { AuditPage } from './pages/audit-page';
 import { CommandsPage } from './pages/commands-page';
 import { ConfrontationsPage } from './pages/confrontations-page';
 import { LoginPage } from './pages/login-page';
+import { LogsPage } from './pages/logs-page';
 import { NotFoundPage } from './pages/not-found-page';
 import { OverviewPage } from './pages/overview-page';
 import { PoolsPage } from './pages/pools-page';
@@ -47,6 +48,7 @@ function AuthenticatedRoutes() {
       <Route path="/comandos" component={CommandsPage} />
       <Route path="/ranking" component={RankingPage} />
       <Route path="/auditoria" component={AuditPage} />
+      <Route path="/logs" component={LogsPage} />
       <Route component={NotFoundPage} />
     </Switch>
   );

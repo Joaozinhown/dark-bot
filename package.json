@@ -1,7 +1,7 @@
 {
   "name": "dark-bot",
   "version": "1.0.0",
-  "description": "Bot competitivo DBD — Queens Trials",
+  "description": "Bot competitivo DBD — Dark Trials Arena",
   "main": "build/index.js",
   "scripts": {
     "dev": "node scripts/migrate.js && tsx watch src/index.ts",
@@ -11,7 +11,7 @@
     "panel:dev": "vite --config panel/vite.config.ts",
     "panel:preview": "vite preview --config panel/vite.config.ts",
     "panel:test:e2e": "playwright test --config panel/playwright.config.ts",
-    "test": "npm run build:ts && node --test scripts/prepare-discloud-staging.test.js scripts/discloud-subdomain-cutover.test.js build/systems/veto-rules.test.js build/tests/commands-contract.test.js build/tests/migration-integration.test.js build/services/audit-service.test.js build/services/veto-selection-service.test.js build/services/role-service.test.js build/services/pool-service.test.js build/services/preset-service.test.js build/services/confrontation-service.test.js build/services/player-service.test.js build/services/report-service.test.js build/services/guild-permission-service.test.js build/services/command-setting-service.test.js build/web/config.test.js build/web/auth/crypto.test.js build/web/auth/discord-oauth.test.js build/web/auth/session-service.test.js build/web/authorization/guild-access.test.js build/web/realtime/connection-limiter.test.js build/web/realtime/event-bus.test.js build/web/panel-actions.test.js build/web/runtime.test.js build/web/server.test.js build/web/startup.test.js",
+    "test": "npm run build:ts && node --test scripts/prepare-discloud-staging.test.js scripts/discloud-subdomain-cutover.test.js build/systems/veto-rules.test.js build/tests/commands-contract.test.js build/tests/migration-integration.test.js build/custom-commands/compiler.test.js build/custom-commands/executor.test.js build/custom-commands/registry.test.js build/custom-commands/sandbox.test.js build/custom-commands/script-access.test.js build/services/runtime-log-service.test.js build/services/audit-service.test.js build/services/veto-selection-service.test.js build/services/role-service.test.js build/services/pool-service.test.js build/services/preset-service.test.js build/services/confrontation-service.test.js build/services/player-service.test.js build/services/report-service.test.js build/services/guild-permission-service.test.js build/services/command-setting-service.test.js build/web/config.test.js build/web/auth/crypto.test.js build/web/auth/discord-oauth.test.js build/web/auth/session-service.test.js build/web/authorization/guild-access.test.js build/web/realtime/connection-limiter.test.js build/web/realtime/event-bus.test.js build/web/panel-actions.test.js build/web/runtime.test.js build/web/server.test.js build/web/startup.test.js",
     "start": "node scripts/start.js",
     "start:bot-hosting": "npm start",
     "deploy:stage": "node scripts/prepare-discloud-staging.js",
@@ -38,6 +38,7 @@
     "fastify": "^5.10.0",
     "lucide-react": "^1.27.0",
     "prisma": "^6.10.0",
+    "quickjs-emscripten": "^0.32.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript": "^5.7.0",

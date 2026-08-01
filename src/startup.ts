@@ -4,6 +4,7 @@ import { join } from 'path';
 import prisma from './database/client';
 import { POOL_PRESETS } from './data/pool-presets';
 import { createPresetService, PresetStore } from './services/preset-service';
+import { buildGuildCommandPayloads, syncGuildCommandCatalog } from './custom-commands/registry';
 
 const GUILD_ID = process.env.GUILD_ID!;
 const CLIENT_ID = process.env.CLIENT_ID!;
@@ -55,11 +56,8 @@ function loadCommands(): LoadedCommands {
 }
 
 export async function syncGuildCommands(token: string, guild: Guild, commands: any[]): Promise<void> {
-  const rest = new REST({ version: '10' }).setToken(token);
-  await rest.put(Routes.applicationGuildCommands(CLIENT_ID, guild.id), {
-    body: commands,
-  });
-  console.log(`[Startup] ${commands.length} comandos sincronizados no servidor ${guild.name} (${guild.id}).`);
+  const synced = await syncGuildCommandCatalog(token, CLIENT_ID, guild, commands);
+  console.log(`[Startup] ${synced} comandos sincronizados no servidor ${guild.name} (${guild.id}).`);
 }
 
 async function syncConnectedGuilds(token: string, client: Client, commands: any[]): Promise<void> {
@@ -93,10 +91,11 @@ export async function deployCommandsAuto(token: string, client?: Client): Promis
   if (client) {
     await syncConnectedGuilds(token, client, commands);
   } else if (GUILD_ID) {
+    const catalog = await buildGuildCommandPayloads(GUILD_ID, commands);
     await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
-      body: commands,
+      body: catalog.payloads,
     });
-    console.log(`[Startup] ${commands.length} comandos sincronizados no servidor ${GUILD_ID}.`);
+    console.log(`[Startup] ${catalog.payloads.length} comandos sincronizados no servidor ${GUILD_ID}.`);
   }
 
   return loadedCommands.collection;

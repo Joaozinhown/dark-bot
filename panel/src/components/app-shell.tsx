@@ -14,6 +14,7 @@ import {
   ScrollText,
   ShieldCheck,
   Swords,
+  Terminal,
   UsersRound,
   X,
   type LucideIcon,
@@ -43,6 +44,7 @@ const navigation: NavigationItem[] = [
   { href: '/comandos', label: 'Comandos', shortLabel: 'Comandos', icon: Command },
   { href: '/ranking', label: 'Ranking', shortLabel: 'Ranking', icon: Medal },
   { href: '/auditoria', label: 'Auditoria', shortLabel: 'Auditoria', icon: ScrollText },
+  { href: '/logs', label: 'Logs', shortLabel: 'Logs', icon: Terminal },
 ];
 
 function NavigationLink({ item, onNavigate }: { item: NavigationItem; onNavigate?: () => void }) {

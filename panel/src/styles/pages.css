@@ -154,6 +154,14 @@
 .audit-choice span { color: var(--color-text-muted); font-size: 12px; }
 .audit-actor code { color: var(--color-text-subtle); font-size: 11px; }
 
+.logs-source { margin-left: auto; color: var(--color-text-subtle); font-size: 12px; }
+.logs-console { min-height: 520px; background: #050506; }
+.logs-console > header { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--color-border); }
+.logs-console > header svg { width: 16px; height: 16px; color: var(--color-accent-light); }
+.logs-console > header strong { font-size: 12px; }
+.logs-console > header time { margin-left: auto; color: var(--color-text-subtle); font-size: 11px; }
+.logs-console pre { height: min(68vh, 720px); margin: 0; padding: 14px; overflow: auto; color: #d9dbe0; font: 12px/1.6 var(--font-ui); white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-color: var(--color-border-strong) #050506; }
+
 .audit-disclosure { min-width: 150px; }
 .audit-disclosure summary {
   display: inline-flex;

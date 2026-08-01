@@ -370,6 +370,8 @@
 .admin-dialog__header h2 { font-size: 16px; }
 .admin-dialog__header p { margin-top: 4px; color: var(--color-text-muted); font-size: 13px; }
 .admin-dialog__body { max-height: calc(100vh - 136px); padding: 18px; overflow-y: auto; }
+.admin-dialog:has(.command-editor) { width: min(1040px, calc(100vw - 32px)); max-height: calc(100vh - 24px); }
+.admin-dialog:has(.command-editor) .admin-dialog__body { max-height: calc(100vh - 104px); }
 
 .admin-form { display: grid; gap: 14px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -387,6 +389,7 @@
   color: var(--color-text);
 }
 .form-field textarea { min-height: 88px; resize: vertical; }
+.form-field select[multiple] { min-height: 128px; }
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus { border-color: var(--color-accent-light); box-shadow: 0 0 0 2px rgb(223 23 44 / 0.2); }
@@ -421,6 +424,33 @@
 .item-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .mobile-record-list { display: none; }
+
+.segmented-control { display: inline-flex; min-height: 38px; padding: 3px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); }
+.segmented-control button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-radius: 2px; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.segmented-control button svg { width: 15px; height: 15px; }
+.segmented-control button.is-active { background: var(--color-surface-hover); color: var(--color-text); }
+.command-editor { display: grid; gap: 16px; }
+.command-editor__visual { display: grid; gap: 18px; }
+.command-editor__json textarea { min-height: 55vh; font: 12px/1.55 var(--font-ui); tab-size: 2; }
+.section-inline { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.command-options, .command-workflow { display: grid; gap: 8px; }
+.command-option { display: grid; min-height: 42px; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg-subtle); }
+.command-option__editor { display: grid; gap: 8px; }
+.command-option strong { color: var(--color-accent-light); font-size: 11px; text-transform: uppercase; }
+.command-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.workflow-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.workflow-toolbar .button { min-height: 34px; padding: 5px 8px; font-size: 11px; }
+.command-step { display: grid; gap: 10px; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg-subtle); }
+.command-step > header { display: flex; align-items: center; justify-content: space-between; }
+.command-step > header strong { color: var(--color-accent-light); font-size: 12px; }
+.command-step__fields { display: grid; gap: 8px; }
+.code-input { min-height: 180px !important; font: 12px/1.55 var(--font-ui); tab-size: 2; }
+.command-versions { display: flex; flex-wrap: wrap; gap: 6px; }
+.simulation-output { display: grid; gap: 7px; padding: 10px; border: 1px solid #286f46; border-radius: var(--radius-sm); background: var(--color-success-soft); }
+.simulation-output strong { color: #a9efc4; font-size: 12px; }
+.simulation-output pre { max-height: 240px; margin: 0; overflow: auto; color: var(--color-text-muted); font: 11px/1.5 var(--font-ui); white-space: pre-wrap; }
+.command-editor__actions { position: sticky; bottom: -18px; display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; margin: 0 -18px -18px; padding: 12px 18px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
+.commands-table table { min-width: 980px; }
 .mobile-record { padding: 14px; border-bottom: 1px solid var(--color-border); }
 .mobile-record:last-child { border-bottom: 0; }
 .mobile-record > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

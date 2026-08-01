@@ -59,8 +59,8 @@ function formatAction(action: string): string {
 }
 
 function resolveAuditView(entry: AuditEntry): AuditView {
-  const actorName = readString(entry.details, 'actorDisplayName') ?? entry.actorUserId;
-  const actorUsername = readString(entry.details, 'actorUsername');
+  const actorName = entry.actorDisplayName || readString(entry.details, 'actorDisplayName') || 'Usuário desconhecido';
+  const actorUsername = entry.actorUsername ?? readString(entry.details, 'actorUsername');
   const setNumber = readNumber(entry.details, 'setNumber');
   const vetoStep = readNumber(entry.details, 'vetoStep');
   const killer = readString(entry.details, 'killer');
@@ -121,10 +121,9 @@ function AuditAction({ view }: { view: AuditView }) {
 
 function AuditActor({ entry, view }: { entry: AuditEntry; view: AuditView }) {
   return (
-    <div className="audit-actor">
+    <div className="audit-actor" title={`ID: ${entry.actorUserId}`}>
       <strong>{view.actorName}</strong>
       {view.actorUsername ? <span>@{view.actorUsername}</span> : null}
-      {view.actorName !== entry.actorUserId ? <code>{entry.actorUserId}</code> : null}
     </div>
   );
 }
@@ -164,7 +163,7 @@ export function AuditPage() {
   );
   const filtered = useMemo(() => (query.data ?? []).filter(item => {
     const detailText = Object.values(item.details).map(value => String(value)).join(' ');
-    const haystack = `${item.action} ${item.actorUserId} ${item.entityId ?? ''} ${detailText}`.toLowerCase();
+    const haystack = `${item.action} ${item.actorDisplayName} ${item.actorUsername ?? ''} ${item.actorUserId} ${item.entityId ?? ''} ${detailText}`.toLowerCase();
     return haystack.includes(search.toLowerCase()) && (entity === 'todas' || item.entityType === entity);
   }), [entity, query.data, search]);
 

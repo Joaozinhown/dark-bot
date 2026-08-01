@@ -6,6 +6,7 @@ import {
   mockOverview,
   mockPoolDetails,
   mockManagement,
+  mockLogs,
   mockPools,
   mockRanking,
   mockRecentConfrontations,
@@ -27,6 +28,7 @@ import type {
   Session,
   Team,
   ManagementData,
+  RuntimeLogSnapshot,
 } from '../types/api';
 
 export const isMockMode = import.meta.env.DEV && import.meta.env.VITE_PANEL_MOCK === 'true';
@@ -137,8 +139,29 @@ export const panelApi = {
     return isMockMode ? mockDelay(mockManagement) : request(`/api/guilds/${guildId}/management`);
   },
 
+  logs(guildId: string): Promise<RuntimeLogSnapshot> {
+    return isMockMode ? mockDelay(mockLogs) : request(`/api/guilds/${guildId}/logs`);
+  },
+
   action(guildId: string, action: PanelAction): Promise<unknown> {
-    if (isMockMode) return mockDelay(action);
+    if (isMockMode) {
+      if (action.type === 'command.save-draft') {
+        return mockDelay({
+          ...mockCommands[0],
+          id: action.commandId ?? 500,
+          sourceType: action.sourceType,
+          factoryCommandName: action.factoryCommandName,
+          name: action.definition.command.name.ptBR,
+          description: action.definition.command.description.ptBR,
+          definition: action.definition,
+          status: 'draft',
+        });
+      }
+      if (action.type === 'command.preview') {
+        return mockDelay({ actions: [{ type: 'reply', content: action.definition.workflow[0] && 'message' in action.definition.workflow[0] ? action.definition.workflow[0].message.content?.ptBR : null }], scriptLogs: [] });
+      }
+      return mockDelay(action);
+    }
     const csrfToken = readCookie('dta_csrf');
     return request(`/api/guilds/${guildId}/actions`, {
       method: 'POST',
