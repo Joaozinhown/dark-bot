@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, m } from 'motion/react';
 import {
   Activity,
   BookOpenCheck,
@@ -19,15 +20,19 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
 import { useGuildContext } from '../context/guild-context';
 import { useRealtimeSync } from '../hooks/use-realtime-sync';
 import { isMockMode, panelApi } from '../lib/api';
 import { labelAccessSource } from '../lib/format';
 import type { Session } from '../types/api';
+import { popoverVariants } from '../motion/motion-config';
+import { PageTransition } from '../motion/page-transition';
+import { usePanelReducedMotion } from '../motion/motion-provider';
 import { Brand } from './brand';
 import { GuildSelector } from './guild-selector';
+import { WorkspaceScroll } from './workspace-scroll';
 
 interface NavigationItem {
   href: string;
@@ -74,7 +79,7 @@ function RealtimeIndicator({ status }: { status: 'connected' | 'reconnecting' | 
       ? 'Reconectando dados'
       : 'Aguardando servidor';
   return (
-    <span className={`realtime realtime--${status}`} aria-live="polite">
+    <span className={`realtime realtime--${status}`} data-status={status} aria-live="polite">
       <Activity aria-hidden="true" />
       <span>{label}</span>
     </span>
@@ -85,6 +90,10 @@ function UserMenu({ session }: { session: Session }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuItemRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const shouldReduceMotion = usePanelReducedMotion();
   const logout = useMutation({
     mutationFn: panelApi.logout,
     onSuccess: () => {
@@ -98,21 +107,68 @@ function UserMenu({ session }: { session: Session }) {
     },
   });
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeAndRestoreFocus = () => {
+      setIsOpen(false);
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    };
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeAndRestoreFocus();
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault();
+        menuItemRef.current?.focus();
+      }
+    };
+    const closeOutside = (event: Event) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target) && !triggerRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    const focusFrame = window.requestAnimationFrame(() => menuItemRef.current?.focus());
+    window.addEventListener('keydown', handleKeydown);
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('focusin', closeOutside);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('focusin', closeOutside);
+    };
+  }, [isOpen]);
+
   return (
     <div className="user-menu">
       <button
+        ref={triggerRef}
         className="user-menu__trigger"
         type="button"
         aria-expanded={isOpen}
         aria-haspopup="menu"
         onClick={() => setIsOpen(value => !value)}
+        onKeyDown={event => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setIsOpen(true);
+          }
+        }}
       >
         <span className="avatar" aria-hidden="true">{session.username.slice(0, 2).toUpperCase()}</span>
         <span className="user-menu__name">{session.username}</span>
         <ChevronDown aria-hidden="true" />
       </button>
+      <AnimatePresence>
       {isOpen ? (
-        <div className="user-menu__popover" role="menu">
+        <m.div
+          ref={menuRef}
+          className="user-menu__popover"
+          role="menu"
+          aria-label="Menu do usuário"
+          variants={popoverVariants(shouldReduceMotion)}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+        >
           <div className="user-menu__identity">
             <CircleUserRound aria-hidden="true" />
             <div>
@@ -122,6 +178,7 @@ function UserMenu({ session }: { session: Session }) {
           </div>
           {logout.error ? <p className="inline-error" role="alert">{logout.error.message}</p> : null}
           <button
+            ref={menuItemRef}
             className="menu-command"
             type="button"
             role="menuitem"
@@ -131,8 +188,9 @@ function UserMenu({ session }: { session: Session }) {
             <LogOut aria-hidden="true" />
             {logout.isPending ? 'Saindo...' : 'Sair do painel'}
           </button>
-        </div>
+        </m.div>
       ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -140,34 +198,70 @@ function UserMenu({ session }: { session: Session }) {
 function MobileNavigation() {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [location] = useLocation();
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const moreSheetRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const shouldReduceMotion = usePanelReducedMotion();
   const primary = navigation.slice(0, 4);
   const secondary = navigation.slice(4);
 
+  const closeMore = useCallback((restoreFocus = true) => {
+    setIsMoreOpen(false);
+    if (restoreFocus) window.requestAnimationFrame(() => moreTriggerRef.current?.focus());
+  }, []);
+
   useEffect(() => setIsMoreOpen(false), [location]);
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsMoreOpen(false);
+    if (!isMoreOpen) return;
+    const inertElements = ['.sidebar', '.workspace', '.mobile-navigation']
+      .map(selector => document.querySelector<HTMLElement>(selector))
+      .filter((element): element is HTMLElement => Boolean(element));
+    inertElements.forEach(element => { element.inert = true; });
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMore();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(moreSheetRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
     };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, []);
+    window.addEventListener('keydown', handleKeydown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', handleKeydown);
+      inertElements.forEach(element => { element.inert = false; });
+    };
+  }, [closeMore, isMoreOpen]);
 
   return (
     <>
+      <AnimatePresence>
       {isMoreOpen ? (
-        <div className="mobile-more" role="dialog" aria-modal="true" aria-label="Mais áreas">
-          <button className="mobile-more__backdrop" type="button" aria-label="Fechar menu" onClick={() => setIsMoreOpen(false)} />
-          <div className="mobile-more__sheet">
+        <m.div className="mobile-more" role="dialog" aria-modal="true" aria-label="Mais áreas" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <m.button className="mobile-more__backdrop" type="button" aria-label="Fechar menu" onClick={() => closeMore()} />
+          <m.div ref={moreSheetRef} className="mobile-more__sheet" variants={popoverVariants(shouldReduceMotion, 8)} initial="initial" animate="animate" exit="exit">
             <div className="mobile-more__header">
               <strong>Mais áreas</strong>
-              <button className="icon-button" type="button" aria-label="Fechar menu" onClick={() => setIsMoreOpen(false)}>
+              <button ref={closeButtonRef} className="icon-button" type="button" aria-label="Fechar menu" onClick={() => closeMore()}>
                 <X aria-hidden="true" />
               </button>
             </div>
             {secondary.map(item => <NavigationLink key={item.href} item={item} />)}
-          </div>
-        </div>
+          </m.div>
+        </m.div>
       ) : null}
+      </AnimatePresence>
       <nav className="mobile-navigation" aria-label="Navegação principal">
         {primary.map(item => {
           const Icon = item.icon;
@@ -185,6 +279,7 @@ function MobileNavigation() {
           );
         })}
         <button
+          ref={moreTriggerRef}
           className={`mobile-navigation__item ${isMoreOpen ? 'mobile-navigation__item--active' : ''}`}
           type="button"
           aria-expanded={isMoreOpen}
@@ -201,9 +296,12 @@ function MobileNavigation() {
 export function AppShell({ session, children }: { session: Session; children: ReactNode }) {
   const { selectedGuild, selectedGuildId, error, refetch } = useGuildContext();
   const realtime = useRealtimeSync(selectedGuildId);
+  const shouldReduceMotion = usePanelReducedMotion();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const updateScrolled = useCallback((next: boolean) => setIsScrolled(current => current === next ? current : next), []);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-reduced-motion={String(shouldReduceMotion)}>
       <aside className="sidebar">
         <Brand />
         <GuildSelector />
@@ -223,7 +321,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
       </aside>
 
       <div className="workspace">
-        <header className="topbar">
+        <header className={`topbar ${isScrolled ? 'topbar--scrolled' : ''}`}>
           <div className="topbar__mobile-brand"><Brand compact /></div>
           <div className="topbar__server"><GuildSelector /></div>
           <div className="topbar__tools">
@@ -237,7 +335,8 @@ export function AppShell({ session, children }: { session: Session; children: Re
             <button type="button" onClick={refetch}>Tentar novamente</button>
           </div>
         ) : null}
-        <main className="workspace__content" id="conteudo-principal">{children}</main>
+        <WorkspaceScroll onScrolledChange={updateScrolled} />
+        <main className="workspace__content" id="conteudo-principal"><PageTransition>{children}</PageTransition></main>
       </div>
       <MobileNavigation />
     </div>

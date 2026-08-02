@@ -2,6 +2,7 @@ import { ListFilter, Plus, Settings2, Swords } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { AdminDialog, MutationFeedback } from '../components/admin-dialog';
 import { PageHeader } from '../components/page-header';
+import { ScrollableTable } from '../components/scrollable-table';
 import { RefreshButton, ResultsCount, SearchField } from '../components/data-tools';
 import { EmptyState, ErrorState, LoadingState } from '../components/query-state';
 import { StatusBadge } from '../components/status-badge';
@@ -75,13 +76,13 @@ export function ConfrontationsPage() {
         {query.isPending ? <LoadingState /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhum confronto encontrado" description="Ajuste a busca ou crie um confronto." icon={<Swords aria-hidden="true" />} /> : null}
-        {filtered.length > 0 ? <><div className="table-scroll confrontations-table"><table>
+        {filtered.length > 0 ? <><ScrollableTable className="confrontations-table"><table>
           <thead><tr><th>Confronto</th><th>Formato</th><th>Placar</th><th>Status</th><th>Início</th><th><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>{filtered.map(item => {
             const isActive = management.data?.activeConfrontations.some(active => active.id === item.id) ?? false;
             return <tr key={item.id}><td className="cell-primary"><strong>Confronto #{item.id}</strong><span>Registro competitivo</span></td><td><span className="format-label">{item.formato}</span></td><td className="score-cell">{item.timeAVitorias} <span>×</span> {item.timeBVitorias}</td><td><StatusBadge status={item.status} /></td><td className="cell-muted">{formatDateTime(item.criadoEm)}</td><td>{isActive ? <button className="button button--secondary" type="button" onClick={() => { setSelectedId(item.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button> : null}</td></tr>;
           })}</tbody>
-        </table></div><div className="mobile-record-list confrontation-mobile-list">{filtered.map(item => {
+        </table></ScrollableTable><div className="mobile-record-list confrontation-mobile-list">{filtered.map(item => {
           const isActive = management.data?.activeConfrontations.some(active => active.id === item.id) ?? false;
           return <article className="mobile-record" key={item.id}>
             <header><div><strong>Confronto #{item.id}</strong><span>{item.formato}</span></div><StatusBadge status={item.status} /></header>

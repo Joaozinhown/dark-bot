@@ -4,6 +4,7 @@ import { useHealth, useOverview, useTeams } from '../hooks/use-panel-data';
 import { formatDateTime, formatUptime } from '../lib/format';
 import type { ActiveConfrontation } from '../types/api';
 import { PageHeader } from '../components/page-header';
+import { ScrollableTable } from '../components/scrollable-table';
 import { EmptyState, ErrorState, LoadingState } from '../components/query-state';
 import { StatusBadge } from '../components/status-badge';
 import { RefreshButton } from '../components/data-tools';
@@ -96,14 +97,14 @@ export function OverviewPage() {
                   icon={<Swords aria-hidden="true" />}
                 />
               ) : (<>
-                <div className="table-scroll overview-active-table">
+                <ScrollableTable className="overview-active-table">
                   <table>
                     <thead><tr><th>Confronto</th><th>Placar</th><th>Etapa</th><th>Início</th></tr></thead>
                     <tbody>{overview.data.confrontations.map(item => (
                       <ActiveMatchRow key={item.id} confrontation={item} teams={teamNames} />
                     ))}</tbody>
                   </table>
-                </div>
+                </ScrollableTable>
                 <div className="mobile-record-list overview-active-mobile">
                   {overview.data.confrontations.map(item => (
                     <article className="mobile-record" key={item.id}>
@@ -165,7 +166,7 @@ export function OverviewPage() {
                 <p>Configuração presetada disponível para novos confrontos.</p>
               </div>
             </div>
-            <div className="table-scroll overview-pools-table">
+            <ScrollableTable className="overview-pools-table">
               <table>
                 <thead><tr><th>Pool</th><th>Formato</th><th>Mapas</th><th>Killers</th><th>Uso</th><th>Estado</th></tr></thead>
                 <tbody>{overview.data.pools.map(pool => (
@@ -176,7 +177,7 @@ export function OverviewPage() {
                   </tr>
                 ))}</tbody>
               </table>
-            </div>
+            </ScrollableTable>
             <div className="mobile-record-list overview-pools-mobile">
               {overview.data.pools.map(pool => (
                 <article className="mobile-record" key={pool.id}>

@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/jetbrains-mono';
 import { App } from './App';
+import { MotionProvider } from './motion/motion-provider';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/shell.css';
@@ -25,7 +26,7 @@ if (!root) throw new Error('Elemento raiz do painel não encontrado.');
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <MotionProvider><App /></MotionProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

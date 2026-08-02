@@ -257,6 +257,13 @@
   padding: 0 24px;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.topbar--scrolled {
+  border-bottom-color: var(--color-border-strong);
+  background: var(--color-bg-subtle);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.22);
 }
 
 .topbar__mobile-brand,
@@ -290,6 +297,14 @@
 
 .realtime--connected svg { color: var(--color-success); }
 .realtime--reconnecting svg { color: var(--color-warning); }
+
+.realtime--reconnecting svg {
+  animation: realtime-pulse 1.3s var(--ease-out-interface) infinite alternate;
+}
+
+@keyframes realtime-pulse {
+  to { opacity: 0.42; }
+}
 
 .user-menu {
   position: relative;
@@ -401,6 +416,35 @@
 
 .menu-command:hover { background: var(--color-red-soft); }
 .menu-command svg { width: 17px; height: 17px; }
+
+.page-transition {
+  min-width: 0;
+}
+
+.scroll-progress {
+  position: fixed;
+  top: var(--topbar-height);
+  right: 0;
+  left: var(--sidebar-width);
+  z-index: calc(var(--z-sticky) + 1);
+  height: 2px;
+  transform-origin: 0 50%;
+  background: var(--color-accent-light);
+  pointer-events: none;
+}
+
+.back-to-top {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: var(--z-popover);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.42);
+}
+
+body:has(dialog[open]) .back-to-top {
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .inline-error {
   padding: 7px 8px;

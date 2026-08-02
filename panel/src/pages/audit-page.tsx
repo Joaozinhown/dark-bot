@@ -1,6 +1,7 @@
 import { ChevronDown, Crosshair, History, ListFilter, ShieldX } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PageHeader } from '../components/page-header';
+import { ScrollableTable } from '../components/scrollable-table';
 import { RefreshButton, ResultsCount, SearchField } from '../components/data-tools';
 import { EmptyState, ErrorState, LoadingState } from '../components/query-state';
 import { useGuildContext } from '../context/guild-context';
@@ -190,7 +191,7 @@ export function AuditPage() {
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhum evento encontrado" description="Ajuste os filtros ou aguarde uma nova ação administrativa." icon={<History aria-hidden="true" />} /> : null}
         {filtered.length > 0 ? <>
-          <div className="table-scroll audit-table"><table>
+          <ScrollableTable className="audit-table"><table>
             <thead><tr><th>Ação</th><th>Responsável</th><th>Alvo</th><th>Escolha</th><th>Data</th><th><span className="sr-only">Detalhes</span></th></tr></thead>
             <tbody>{filtered.map(entry => {
               const view = resolveAuditView(entry);
@@ -203,7 +204,7 @@ export function AuditPage() {
                 <td><AuditDetails entry={entry} /></td>
               </tr>;
             })}</tbody>
-          </table></div>
+          </table></ScrollableTable>
           <div className="audit-mobile-list">{filtered.map(entry => {
             const view = resolveAuditView(entry);
             return <article className="mobile-record audit-mobile-record" key={entry.id}>
