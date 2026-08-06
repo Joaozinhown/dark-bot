@@ -1,9 +1,9 @@
 node_modules/
 dist/
-dist/
+panel/dist/
 panel/test-results/
 panel/playwright-report/
-
+build/
 discloud/logs/
 discloud/backups/
 .env

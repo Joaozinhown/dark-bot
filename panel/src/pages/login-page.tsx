@@ -1,47 +1,38 @@
 import { Bot, CircleCheck, LogIn, ShieldCheck } from 'lucide-react';
 import { Brand } from '../components/brand';
-import { LanguageSelector } from '../components/language-selector';
 import { ErrorState, LoadingState } from '../components/query-state';
-import { useLocale } from '../hooks/use-locale';
 import { useHealth } from '../hooks/use-panel-data';
 import { isMockMode } from '../lib/api';
-import { loginTranslations } from '../lib/i18n/login';
 
 export function LoginPage() {
   const health = useHealth();
   const loginHref = isMockMode ? '/?mockAuth=logged-in' : '/api/auth/login';
-  const [locale, setLocale] = useLocale();
-  const t = loginTranslations[locale];
 
   return (
     <main className="login-page">
       <section className="login-panel" aria-labelledby="login-title">
-        <div className="login-panel__top-bar">
-          <Brand />
-          <LanguageSelector current={locale} onChange={setLocale} />
-        </div>
-
+        <Brand />
         <div className="login-panel__heading">
-          <span className="eyebrow">{t.eyebrow}</span>
-          <h1 id="login-title">{t.title}</h1>
-          <p>{t.description}</p>
+          <span className="eyebrow">Central operacional</span>
+          <h1 id="login-title">Acesse com sua conta do Discord</h1>
+          <p>Somente servidores conectados ao Dark Bot e autorizados para sua conta serão exibidos.</p>
         </div>
 
         <a className="button button--discord button--wide" href={loginHref}>
           <LogIn aria-hidden="true" />
-          {t.loginButton}
+          Entrar com Discord
         </a>
 
         <div className="login-panel__access">
           <ShieldCheck aria-hidden="true" />
           <div>
-            <strong>{t.accessTitle}</strong>
-            <span>{t.accessDescription}</span>
+            <strong>Acesso restrito à staff</strong>
+            <span>Dono, Gerenciar Servidor ou cargo administrativo configurado.</span>
           </div>
         </div>
 
         <div className="service-check" aria-live="polite">
-          {health.isPending ? <LoadingState rows={1} label={t.checkingBot} /> : null}
+          {health.isPending ? <LoadingState rows={1} label="Verificando o bot" /> : null}
           {health.isError ? <ErrorState error={health.error} onRetry={() => void health.refetch()} /> : null}
           {health.data ? (
             <>
@@ -49,8 +40,8 @@ export function LoginPage() {
                 {health.data.botReady ? <CircleCheck aria-hidden="true" /> : <Bot aria-hidden="true" />}
               </span>
               <div>
-                <strong>{health.data.botReady ? t.botOnline : t.botStarting}</strong>
-                <span>{t.serversConnected(health.data.guildCount)}</span>
+                <strong>{health.data.botReady ? 'Dark Bot online' : 'Dark Bot iniciando'}</strong>
+                <span>{health.data.guildCount} servidores conectados</span>
               </div>
             </>
           ) : null}

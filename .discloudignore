@@ -1,15 +1,9 @@
 node_modules/
-.env
-dist/
 .agents/
 .codex/
 .mimocode/
 .vscode/
 docs/
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
 .git/
 .gitignore
 PLANO-IMPLEMENTACAO.md
@@ -19,5 +13,8 @@ stop.bat
 status.bat
 start.sh
 render.yaml
+DTA BOT FINAL.zip
 discloud/logs/
 discloud/backups/
+
+.dta-discloud-staging

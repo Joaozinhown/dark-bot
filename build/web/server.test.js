@@ -263,8 +263,8 @@ function cookieLine(setCookie, name) {
             url: `/api/auth/callback?code=code&state=${encodeURIComponent(state)}`,
             headers: { cookie: cookiePair(login.headers['set-cookie'], 'dta_oauth_state') },
         });
-        strict_1.default.equal(callback.statusCode, 302);
-        strict_1.default.ok(callback.headers.location?.startsWith('/auth-error?code=NO_AUTHORIZED_GUILDS'));
+        strict_1.default.equal(callback.statusCode, 403);
+        strict_1.default.equal(callback.json().error.code, 'NO_AUTHORIZED_GUILDS');
         strict_1.default.equal(createCalls, 0);
     }
     finally {

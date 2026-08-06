@@ -23,13 +23,13 @@ exports.data = new discord_js_1.SlashCommandBuilder()
     .setDescription('Cargo do Time B')
     .setRequired(true));
 async function execute(interaction) {
-    await interaction.deferReply();
     const poolId = interaction.options.getInteger('pool-id', true);
     const timeA = interaction.options.getRole('time-a', true);
     const timeB = interaction.options.getRole('time-b', true);
     if (!(interaction.channel instanceof discord_js_1.TextChannel)) {
-        await interaction.editReply({
+        await interaction.reply({
             embeds: [(0, embeds_1.createErrorEmbed)('Use este comando em um canal de texto do confronto.')],
+            flags: 64,
         });
         return;
     }
@@ -42,7 +42,7 @@ async function execute(interaction) {
             timeARoleId: timeA.id,
             timeBRoleId: timeB.id,
             channelId: textChannel.id,
-        });
+        }, () => interaction.deferReply());
     }
     catch (error) {
         if (!(error instanceof confrontation_service_1.ConfrontationServiceError))
@@ -50,7 +50,7 @@ async function execute(interaction) {
         const message = error.code === 'POOL_NOT_FOUND'
             ? 'Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.'
             : error.message;
-        await interaction.editReply({ embeds: [(0, embeds_1.createErrorEmbed)(message)] });
+        await interaction.reply({ embeds: [(0, embeds_1.createErrorEmbed)(message)], flags: 64 });
         return;
     }
     const { poolConfig, ...confronto } = created;

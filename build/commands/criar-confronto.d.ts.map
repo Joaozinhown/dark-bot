@@ -1,1 +1,1 @@
-{"version":3,"file":"criar-confronto.d.ts","sourceRoot":"","sources":["../../src/commands/criar-confronto.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,2BAA2B,EAE5B,MAAM,YAAY,CAAC;AAUpB,eAAO,MAAM,IAAI,qDAqBd,CAAC;AAEJ,wBAAsB,OAAO,CAAC,WAAW,EAAE,2BAA2B,iBA8DrE"}
+{"version":3,"file":"criar-confronto.d.ts","sourceRoot":"","sources":["../../src/commands/criar-confronto.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,2BAA2B,EAE5B,MAAM,YAAY,CAAC;AAUpB,eAAO,MAAM,IAAI,qDAqBd,CAAC;AAEJ,wBAAsB,OAAO,CAAC,WAAW,EAAE,2BAA2B,iBAiErE"}

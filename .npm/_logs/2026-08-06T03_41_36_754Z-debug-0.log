@@ -1,0 +1,34 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@11.17.0
+2 info using node@v24.19.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/home/node/.npmrc
+5 silly config load:file:/home/node/.npm-global/etc/npmrc
+6 verbose title npm run start
+7 verbose argv "run" "start"
+8 verbose logfile logs-max:10 dir:/home/node/.npm/_logs/2026-08-06T03_41_36_754Z-
+9 verbose logfile /home/node/.npm/_logs/2026-08-06T03_41_36_754Z-debug-0.log
+10 silly logfile start cleaning logs, removing 1 files
+11 silly logfile done cleaning log files
+12 verbose stack Error: command failed
+12 verbose stack     at promiseSpawn (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:22:22)
+12 verbose stack     at spawnWithShell (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:124:10)
+12 verbose stack     at promiseSpawn (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:12:12)
+12 verbose stack     at runScriptPkg (/usr/local/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/run-script-pkg.js:79:13)
+12 verbose stack     at runScript (/usr/local/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/run-script.js:9:12)
+12 verbose stack     at #run (/usr/local/lib/node_modules/npm/lib/commands/run.js:136:13)
+12 verbose stack     at async RunScript.exec (/usr/local/lib/node_modules/npm/lib/commands/run.js:44:7)
+12 verbose stack     at async Npm.exec (/usr/local/lib/node_modules/npm/lib/npm.js:193:9)
+12 verbose stack     at async module.exports (/usr/local/lib/node_modules/npm/lib/cli/entry.js:67:5)
+13 verbose pkgid dark-bot@1.0.0
+14 error path /home/node
+15 error command failed
+16 error signal SIGTERM
+17 error command sh -c node scripts/start.js
+18 verbose cwd /home/node
+19 verbose os Linux 5.15.0-161-generic
+20 verbose node v24.19.0
+21 verbose npm  v11.17.0
+22 verbose exit 1
+23 verbose code 1
+24 error A complete log of this run can be found in: /home/node/.npm/_logs/2026-08-06T03_41_36_754Z-debug-0.log

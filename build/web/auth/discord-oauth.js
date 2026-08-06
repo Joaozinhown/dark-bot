@@ -30,12 +30,10 @@ const guildResponseSchema = zod_1.z.object({
 const guildsResponseSchema = zod_1.z.array(guildResponseSchema);
 class DiscordOAuthError extends Error {
     status;
-    statusCode;
     constructor(message, status) {
         super(message);
         this.status = status;
         this.name = 'DiscordOAuthError';
-        this.statusCode = status;
     }
 }
 exports.DiscordOAuthError = DiscordOAuthError;

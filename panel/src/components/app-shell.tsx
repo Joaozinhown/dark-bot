@@ -9,12 +9,10 @@ import {
   Command,
   History,
   LayoutDashboard,
-  LogIn,
   LogOut,
   Menu,
   Medal,
   ScrollText,
-  ShieldAlert,
   ShieldCheck,
   Swords,
   Terminal,
@@ -295,26 +293,8 @@ function MobileNavigation() {
   );
 }
 
-function NoGuildsState() {
-  const loginHref = isMockMode ? '/?mockAuth=logged-in' : '/api/auth/login';
-  return (
-    <div className="no-guilds-state" role="status">
-      <ShieldAlert aria-hidden="true" />
-      <h2>Nenhum servidor autorizado</h2>
-      <p>
-        O bot não está em nenhum servidor onde sua conta tem permissão de acesso.
-        Verifique se o Dark Bot foi adicionado ao servidor e se você tem os privilégios necessários.
-      </p>
-      <a className="button button--secondary" href={loginHref}>
-        <LogIn aria-hidden="true" />
-        Tentar com outra conta
-      </a>
-    </div>
-  );
-}
-
 export function AppShell({ session, children }: { session: Session; children: ReactNode }) {
-  const { selectedGuild, selectedGuildId, error, isEmpty, refetch } = useGuildContext();
+  const { selectedGuild, selectedGuildId, error, refetch } = useGuildContext();
   const realtime = useRealtimeSync(selectedGuildId);
   const shouldReduceMotion = usePanelReducedMotion();
   const [isScrolled, setIsScrolled] = useState(false);
@@ -356,9 +336,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
           </div>
         ) : null}
         <WorkspaceScroll onScrolledChange={updateScrolled} />
-        <main className="workspace__content" id="conteudo-principal">
-          {isEmpty ? <NoGuildsState /> : <PageTransition>{children}</PageTransition>}
-        </main>
+        <main className="workspace__content" id="conteudo-principal"><PageTransition>{children}</PageTransition></main>
       </div>
       <MobileNavigation />
     </div>

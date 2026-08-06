@@ -60,11 +60,9 @@ export interface DiscordOAuthGuild {
 }
 
 export class DiscordOAuthError extends Error {
-  public statusCode?: number;
   constructor(message: string, readonly status?: number) {
     super(message);
     this.name = 'DiscordOAuthError';
-    this.statusCode = status;
   }
 }
 

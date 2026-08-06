@@ -271,9 +271,6 @@ client.on(discord_js_1.Events.GuildCreate, async (guild) => {
         console.error(`[Startup] Erro ao sincronizar comandos no servidor ${guild.id}:`, error);
     }
 });
-client.on(discord_js_1.Events.Error, error => {
-    console.error('[Discord.js Error]', error);
-});
 async function main() {
     console.log('[Dark Bot] Iniciando...');
     const panelConfig = (0, startup_2.readPanelConfigSafely)({

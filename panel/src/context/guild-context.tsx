@@ -10,7 +10,6 @@ interface GuildContextValue {
   selectedGuildId: string;
   selectGuild: (guildId: string) => void;
   isPending: boolean;
-  isEmpty: boolean;
   error: Error | null;
   refetch: () => void;
 }
@@ -52,7 +51,6 @@ export function GuildProvider({ children }: { children: ReactNode }) {
     selectedGuildId,
     selectGuild,
     isPending: guildQuery.isPending,
-    isEmpty: !guildQuery.isPending && !guildQuery.error && guilds.length === 0,
     error: guildQuery.error,
     refetch: () => {
       void guildQuery.refetch();

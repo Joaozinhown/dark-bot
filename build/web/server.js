@@ -306,7 +306,7 @@ async function createWebApp(options) {
         const oauthGuilds = await options.oauth.getCurrentUserGuilds(tokens.accessToken);
         const authorizedGuilds = await options.runtime.listAuthorizedGuilds(user.id, oauthGuilds);
         if (authorizedGuilds.length === 0) {
-            return reply.redirect('/auth-error?code=NO_AUTHORIZED_GUILDS');
+            return sendError(reply, 403, 'NO_AUTHORIZED_GUILDS', 'Nenhum servidor autorizado encontrado.');
         }
         const created = await options.sessions.create({
             userId: user.id,

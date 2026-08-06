@@ -26,7 +26,6 @@ export interface DiscordOAuthGuild {
 }
 export declare class DiscordOAuthError extends Error {
     readonly status?: number | undefined;
-    statusCode?: number;
     constructor(message: string, status?: number | undefined);
 }
 export declare function createDiscordOAuthClient(config: DiscordOAuthConfig, fetchImpl?: typeof fetch): {
