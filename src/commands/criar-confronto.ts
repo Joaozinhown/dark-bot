@@ -36,14 +36,14 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
   const poolId = interaction.options.getInteger('pool-id', true);
   const timeA = interaction.options.getRole('time-a', true);
   const timeB = interaction.options.getRole('time-b', true);
 
   if (!(interaction.channel instanceof TextChannel)) {
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [createErrorEmbed('Use este comando em um canal de texto do confronto.')],
-      flags: 64,
     });
     return;
   }
@@ -52,22 +52,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   let created;
   try {
-    created = await confrontationService.create(
-      {
-        guildId: interaction.guildId!,
-        poolId,
-        timeARoleId: timeA.id,
-        timeBRoleId: timeB.id,
-        channelId: textChannel.id,
-      },
-      () => interaction.deferReply(),
-    );
+    created = await confrontationService.create({
+      guildId: interaction.guildId!,
+      poolId,
+      timeARoleId: timeA.id,
+      timeBRoleId: timeB.id,
+      channelId: textChannel.id,
+    });
   } catch (error: unknown) {
     if (!(error instanceof ConfrontationServiceError)) throw error;
     const message = error.code === 'POOL_NOT_FOUND'
       ? 'Pool nao encontrada ou inativa. Use `/gerenciar-pool listar` para ver pools disponiveis.'
       : error.message;
-    await interaction.reply({ embeds: [createErrorEmbed(message)], flags: 64 });
+    await interaction.editReply({ embeds: [createErrorEmbed(message)] });
     return;
   }
 

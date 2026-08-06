@@ -1,0 +1,1 @@
+{"version":3,"file":"voiceStateUpdate.js","sourceRoot":"","sources":["../../src/events/voiceStateUpdate.ts"],"names":[],"mappings":";;;AAKA,0BAGC;AARD,2CAAgD;AAEnC,QAAA,IAAI,GAAG,mBAAM,CAAC,gBAAgB,CAAC;AAC/B,QAAA,IAAI,GAAG,KAAK,CAAC;AAE1B,SAAgB,OAAO,CAAC,QAAoB,EAAE,QAAoB;IAChE,oEAAoE;IACpE,yDAAyD;AAC3D,CAAC"}

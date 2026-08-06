@@ -324,6 +324,10 @@ client.on(Events.GuildCreate, async guild => {
   }
 });
 
+client.on(Events.Error, error => {
+  console.error('[Discord.js Error]', error);
+});
+
 async function main() {
   console.log('[Dark Bot] Iniciando...');
 
