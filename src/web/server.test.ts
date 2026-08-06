@@ -275,8 +275,8 @@ test('does not persist OAuth tokens when the user has no authorized guild', asyn
       headers: { cookie: cookiePair(login.headers['set-cookie'], 'dta_oauth_state') },
     });
 
-    assert.equal(callback.statusCode, 403);
-    assert.equal(callback.json().error.code, 'NO_AUTHORIZED_GUILDS');
+    assert.equal(callback.statusCode, 302);
+    assert.ok(callback.headers.location?.startsWith('/auth-error?code=NO_AUTHORIZED_GUILDS'));
     assert.equal(createCalls, 0);
   } finally {
     await app.close();
