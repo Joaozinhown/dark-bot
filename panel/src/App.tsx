@@ -1,5 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
-import { Route, Switch } from 'wouter';
+import { Route, Switch, useLocation } from 'wouter';
 import { AppShell } from './components/app-shell';
 import { LoadingState } from './components/query-state';
 import { GuildProvider } from './context/guild-context';
@@ -10,6 +10,7 @@ import { CommandsPage } from './pages/commands-page';
 import { ConfrontationsPage } from './pages/confrontations-page';
 import { LoginPage } from './pages/login-page';
 import { LogsPage } from './pages/logs-page';
+import { NoAccessPage } from './pages/no-access-page';
 import { NotFoundPage } from './pages/not-found-page';
 import { OverviewPage } from './pages/overview-page';
 import { PoolsPage } from './pages/pools-page';
@@ -55,7 +56,10 @@ function AuthenticatedRoutes() {
 }
 
 export function App() {
+  const [location] = useLocation();
   const session = useSession();
+
+  if (location === '/auth-error') return <NoAccessPage />;
 
   if (session.isPending) return <SessionLoading />;
   if (session.isError) {

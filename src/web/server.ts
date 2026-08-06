@@ -368,7 +368,7 @@ export async function createWebApp(options: WebAppOptions): Promise<FastifyInsta
       oauthGuilds as DiscordOAuthGuild[],
     );
     if (authorizedGuilds.length === 0) {
-      return sendError(reply, 403, 'NO_AUTHORIZED_GUILDS', 'Nenhum servidor autorizado encontrado.');
+      return reply.redirect('/auth-error?code=NO_AUTHORIZED_GUILDS');
     }
     const created = await options.sessions.create({
       userId: user.id,
