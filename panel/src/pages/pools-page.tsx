@@ -2,6 +2,7 @@ import { Layers3, ListFilter, Plus, Settings2, Trash2, X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { AdminDialog, MutationFeedback } from '../components/admin-dialog';
 import { PageHeader } from '../components/page-header';
+import { ScrollableTable } from '../components/scrollable-table';
 import { RefreshButton, ResultsCount, SearchField } from '../components/data-tools';
 import { EmptyState, ErrorState, LoadingState } from '../components/query-state';
 import { StatusBadge } from '../components/status-badge';
@@ -86,7 +87,7 @@ export function PoolsPage() {
         {query.isPending ? <LoadingState /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhuma pool encontrada" description="Ajuste os filtros ou crie um novo preset." icon={<Layers3 aria-hidden="true" />} /> : null}
-        {filtered.length > 0 ? <><div className="table-scroll pools-table"><table>
+        {filtered.length > 0 ? <><ScrollableTable className="pools-table"><table>
           <thead><tr><th>Pool</th><th>Formato</th><th>Mapas</th><th>Killers</th><th>Uso</th><th>Estado</th><th><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>{filtered.map(pool => <tr key={pool.id}>
             <td className="cell-primary"><strong>{pool.nome}</strong><span>ID {pool.id}</span></td>
@@ -95,7 +96,7 @@ export function PoolsPage() {
             <td><StatusBadge status={pool.ativa ? 'ativo' : 'inativo'} label={pool.ativa ? 'Ativa' : 'Inativa'} /></td>
             <td><button className="button button--secondary" type="button" onClick={() => { setSelectedPoolId(pool.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button></td>
           </tr>)}</tbody>
-        </table></div><div className="mobile-record-list pools-mobile-list">{filtered.map(pool => <article className="mobile-record" key={pool.id}>
+        </table></ScrollableTable><div className="mobile-record-list pools-mobile-list">{filtered.map(pool => <article className="mobile-record" key={pool.id}>
           <header><div><strong>{pool.nome}</strong><span>ID {pool.id} / {pool.formato}</span></div><StatusBadge status={pool.ativa ? 'ativo' : 'inativo'} label={pool.ativa ? 'Ativa' : 'Inativa'} /></header>
           <dl className="mobile-record__facts mobile-record__facts--three">
             <div><dt>Mapas</dt><dd>{pool.mapas}</dd></div>

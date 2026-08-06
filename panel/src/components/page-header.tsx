@@ -12,7 +12,7 @@ export function PageHeader({
   return (
     <header className="page-header">
       <div>
-        <h1>{title}</h1>
+        <h1 tabIndex={-1} data-page-heading>{title}</h1>
         <p>{description}</p>
       </div>
       {actions ? <div className="page-header__actions">{actions}</div> : null}

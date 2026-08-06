@@ -1,5 +1,8 @@
 import { AlertCircle, CheckCircle2, X } from 'lucide-react';
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { AnimatePresence, m } from 'motion/react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { popoverVariants } from '../motion/motion-config';
+import { usePanelReducedMotion } from '../motion/motion-provider';
 
 interface AdminDialogProps {
   open: boolean;
@@ -11,17 +14,40 @@ interface AdminDialogProps {
 
 export function AdminDialog({ open, title, description, onClose, children }: AdminDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
+  const [isVisible, setIsVisible] = useState(false);
+  const shouldReduceMotion = usePanelReducedMotion();
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
+    if (open) {
+      if (!dialog.open) {
+        triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        dialog.showModal();
+      }
+      dialog.dataset.state = 'open';
+      setIsVisible(true);
+      return;
+    }
+    if (dialog.open) {
+      dialog.dataset.state = 'closing';
+      setIsVisible(false);
+    }
   }, [open]);
 
+  const finishClose = () => {
+    const dialog = dialogRef.current;
+    if (open || !dialog?.open) return;
+    dialog.close();
+    triggerRef.current?.focus();
+  };
+
   return (
-    <dialog ref={dialogRef} className="admin-dialog" aria-labelledby={titleId} onCancel={onClose} onClose={onClose}>
+    <dialog ref={dialogRef} className="admin-dialog" aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
+      <AnimatePresence onExitComplete={finishClose}>
+      {isVisible ? <m.div className="admin-dialog__surface" inert={!open} variants={popoverVariants(shouldReduceMotion, 8)} initial="initial" animate="animate" exit="exit">
       <div className="admin-dialog__header">
         <div>
           <h2 id={titleId}>{title}</h2>
@@ -32,6 +58,8 @@ export function AdminDialog({ open, title, description, onClose, children }: Adm
         </button>
       </div>
       <div className="admin-dialog__body">{children}</div>
+      </m.div> : null}
+      </AnimatePresence>
     </dialog>
   );
 }

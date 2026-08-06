@@ -2,6 +2,7 @@ import { Plus, Settings2, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { AdminDialog, MutationFeedback } from '../components/admin-dialog';
 import { PageHeader } from '../components/page-header';
+import { ScrollableTable } from '../components/scrollable-table';
 import { RefreshButton, ResultsCount, SearchField } from '../components/data-tools';
 import { EmptyState, ErrorState, LoadingState } from '../components/query-state';
 import { useGuildContext } from '../context/guild-context';
@@ -72,14 +73,14 @@ export function TeamsPage() {
         {query.isPending ? <LoadingState /> : null}
         {query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : null}
         {query.data && filtered.length === 0 ? <EmptyState title="Nenhum cargo encontrado" description="Cargos gerenciados pelo Discord não aparecem nesta lista." icon={<UsersRound aria-hidden="true" />} /> : null}
-        {filtered.length > 0 ? <><div className="table-scroll teams-table"><table>
+        {filtered.length > 0 ? <><ScrollableTable className="teams-table"><table>
           <thead><tr><th>Cargo</th><th>Membros</th><th>Posição</th><th>ID do Discord</th><th><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>{filtered.map(team => <tr key={team.id}>
             <td><span className="role-name"><span className="role-swatch" style={{ backgroundColor: team.color }} aria-hidden="true" /><strong>{team.name}</strong></span></td>
             <td>{team.memberCount}</td><td>{team.position}</td><td className="cell-mono">{team.id}</td>
             <td><button className="button button--secondary" type="button" onClick={() => { setSelectedRoleId(team.id); setSuccess(null); setDialog('manage'); }}><Settings2 aria-hidden="true" />Gerenciar</button></td>
           </tr>)}</tbody>
-        </table></div>
+        </table></ScrollableTable>
         <div className="mobile-record-list teams-mobile-list">{filtered.map(team => <article className="mobile-record" key={team.id}>
           <header><div><span className="role-name"><span className="role-swatch" style={{ backgroundColor: team.color }} aria-hidden="true" /><strong>{team.name}</strong></span><span>ID {team.id}</span></div></header>
           <dl className="mobile-record__facts"><div><dt>Membros</dt><dd>{team.memberCount}</dd></div><div><dt>Posição</dt><dd>{team.position}</dd></div></dl>

@@ -1,4 +1,38 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const isMobileProject = (width: number | undefined) => (width ?? 0) <= 720;
+
+async function makeCurrentPageLong(page: Page) {
+  await page.locator('.page').evaluate(element => {
+    (element as HTMLElement).style.minHeight = '2400px';
+  });
+}
+
+async function navigateFromShell(page: Page, href: string) {
+  if (isMobileProject(page.viewportSize()?.width)) {
+    const directLink = page.locator(`.mobile-navigation a[href="${href}"]`);
+    if (await directLink.count()) {
+      await directLink.click();
+      return;
+    }
+
+    await page.locator('.mobile-navigation button').filter({ hasText: 'Mais' }).click();
+    await page.locator(`.mobile-more a[href="${href}"]`).click();
+    return;
+  }
+
+  await page.locator(`.sidebar a[href="${href}"]`).click();
+}
+
+function boxesOverlap(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+) {
+  return first.x < second.x + second.width
+    && first.x + first.width > second.x
+    && first.y < second.y + second.height
+    && first.y + first.height > second.y;
+}
 
 test('renders the authenticated operational workspace without overflow', async ({ page }, testInfo) => {
   await page.goto('/');
@@ -233,4 +267,166 @@ test('shows live logs and keeps the guild selector in the dark visual system', a
   expect(selectorStyle.colorScheme).toBe('dark');
   expect(selectorStyle.color).toBe('rgb(244, 240, 230)');
   await page.screenshot({ path: testInfo.outputPath('logs.png'), fullPage: true });
+});
+
+test('honors reduced motion for route transitions and programmatic scrolling', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/auditoria');
+  await makeCurrentPageLong(page);
+  await page.evaluate(() => window.scrollTo(0, 760));
+
+  await navigateFromShell(page, '/confrontos');
+  const heading = page.getByRole('heading', { name: /confrontos/i, level: 1 });
+  await expect(heading).toBeVisible();
+  await expect(heading).toBeFocused();
+
+  const pageTransition = page.getByTestId('page-transition');
+  await expect(pageTransition).toBeVisible();
+  await expect.poll(() => pageTransition.evaluate(element => getComputedStyle(element).transform)).toBe('none');
+
+  await makeCurrentPageLong(page);
+  await page.evaluate(() => window.scrollTo(0, 760));
+  const backToTop = page.getByRole('button', { name: /voltar ao topo/i });
+  await expect(backToTop).toBeVisible();
+  await backToTop.click();
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1);
+});
+
+test('resets route scroll and focuses the destination heading', async ({ page }) => {
+  await page.goto('/auditoria');
+  await makeCurrentPageLong(page);
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
+
+  await navigateFromShell(page, '/confrontos');
+  await expect(page).toHaveURL(/\/confrontos$/);
+  const heading = page.getByRole('heading', { name: /confrontos/i, level: 1 });
+  await expect(heading).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1);
+  await expect(heading).toBeFocused();
+});
+
+test('closes overlays with Escape and restores focus to their triggers', async ({ page }, testInfo) => {
+  await page.goto('/pools');
+
+  const dialogTrigger = page.getByRole('button', { name: /criar pool/i });
+  await dialogTrigger.click();
+  const adminDialog = page.getByRole('dialog', { name: /criar pool/i });
+  await expect(adminDialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(adminDialog).toBeHidden();
+  await expect(dialogTrigger).toBeFocused();
+
+  if (isMobileProject(page.viewportSize()?.width)) {
+    const moreTrigger = page.locator('.mobile-navigation button').filter({ hasText: 'Mais' });
+    await moreTrigger.click();
+    const mobileOverlay = page.getByRole('dialog', { name: /mais .*reas/i });
+    await expect(mobileOverlay).toBeVisible();
+    const closeButton = mobileOverlay.locator('.mobile-more__header').getByRole('button', { name: /fechar menu/i });
+    await expect(closeButton).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('mobile-more-motion.png'), fullPage: true });
+    await page.keyboard.press('Escape');
+    await expect(mobileOverlay).toBeHidden();
+    await expect(moreTrigger).toBeFocused();
+    return;
+  }
+
+  const userMenuTrigger = page.locator('.user-menu__trigger');
+  await userMenuTrigger.click();
+  const userMenu = page.getByRole('menu');
+  await expect(userMenu).toBeVisible();
+  await expect(userMenu.getByRole('menuitem')).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('user-menu-motion.png'), fullPage: true });
+  await page.keyboard.press('Escape');
+  await expect(userMenu).toBeHidden();
+  await expect(userMenuTrigger).toBeFocused();
+});
+
+test('tracks long-page progress and returns to the focused heading', async ({ page }, testInfo) => {
+  await page.goto('/auditoria');
+  await makeCurrentPageLong(page);
+
+  const progress = page.getByTestId('workspace-scroll-progress');
+  await expect(progress).toBeVisible();
+  await expect(progress).toHaveAttribute('aria-hidden', 'true');
+  const initialTransform = await progress.evaluate(element => getComputedStyle(element).transform);
+
+  await page.evaluate(() => window.scrollTo(0, 720));
+  const backToTop = page.getByRole('button', { name: /voltar ao topo/i });
+  await expect(backToTop).toBeVisible();
+  await expect.poll(() => progress.evaluate(element => getComputedStyle(element).transform)).not.toBe(initialTransform);
+  await page.screenshot({ path: testInfo.outputPath('scroll-progress-back-to-top.png'), fullPage: false });
+
+  await backToTop.click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('heading', { name: /auditoria/i, level: 1 })).toBeFocused();
+  await expect(backToTop).toBeHidden();
+});
+
+test('updates horizontal table overflow states at both edges', async ({ page }, testInfo) => {
+  test.skip((page.viewportSize()?.width ?? 0) <= 1100, 'Responsive projects expose audit records instead of the table.');
+  await page.goto('/auditoria');
+
+  const tableScroll = page.locator('.audit-table');
+  await expect(tableScroll).toBeVisible();
+  await tableScroll.evaluate(element => {
+    const container = element as HTMLElement;
+    container.style.width = '420px';
+    const table = container.querySelector<HTMLElement>('table');
+    if (table) table.style.minWidth = '1200px';
+  });
+  await expect.poll(() => tableScroll.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+
+  await expect(tableScroll).toHaveAttribute('data-overflow-left', 'false');
+  await expect(tableScroll).toHaveAttribute('data-overflow-right', 'true');
+
+  await tableScroll.evaluate(element => {
+    element.scrollLeft = (element.scrollWidth - element.clientWidth) / 2;
+  });
+  await expect(tableScroll).toHaveAttribute('data-overflow-left', 'true');
+  await expect(tableScroll).toHaveAttribute('data-overflow-right', 'true');
+  await page.screenshot({ path: testInfo.outputPath('table-overflow-edges.png'), fullPage: false });
+
+  await tableScroll.evaluate(element => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await expect(tableScroll).toHaveAttribute('data-overflow-left', 'true');
+  await expect(tableScroll).toHaveAttribute('data-overflow-right', 'false');
+});
+
+test('keeps mobile scroll controls, navigation and sticky actions from overlapping', async ({ page }, testInfo) => {
+  test.skip(!isMobileProject(page.viewportSize()?.width), 'Mobile-only overlap contract.');
+  await page.goto('/auditoria');
+  await makeCurrentPageLong(page);
+  await page.evaluate(() => window.scrollTo(0, 720));
+
+  const backToTop = page.getByRole('button', { name: /voltar ao topo/i });
+  const mobileNavigation = page.locator('.mobile-navigation');
+  await expect(backToTop).toBeVisible();
+  await expect(mobileNavigation).toBeVisible();
+  const backToTopBox = await backToTop.boundingBox();
+  const navigationBox = await mobileNavigation.boundingBox();
+  expect(backToTopBox).not.toBeNull();
+  expect(navigationBox).not.toBeNull();
+  expect(boxesOverlap(backToTopBox!, navigationBox!)).toBe(false);
+
+  await page.goto('/comandos');
+  await page.getByRole('button', { name: /novo comando/i }).click();
+  const dialog = page.getByRole('dialog', { name: /novo comando slash/i });
+  const stickyActions = dialog.locator('.command-editor__actions');
+  await expect(stickyActions).toBeVisible();
+  await stickyActions.scrollIntoViewIfNeeded();
+  await expect(backToTop).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('command-dialog-scroll-actions.png'), fullPage: false });
+
+  const actionsBox = await stickyActions.boundingBox();
+  const currentNavigationBox = await mobileNavigation.boundingBox();
+  expect(actionsBox).not.toBeNull();
+  expect(currentNavigationBox).not.toBeNull();
+  expect(boxesOverlap(actionsBox!, currentNavigationBox!)).toBe(false);
+
+  const viewport = page.viewportSize()!;
+  expect(actionsBox!.x).toBeGreaterThanOrEqual(0);
+  expect(actionsBox!.x + actionsBox!.width).toBeLessThanOrEqual(viewport.width);
+  expect(actionsBox!.y + actionsBox!.height).toBeLessThanOrEqual(viewport.height);
 });
