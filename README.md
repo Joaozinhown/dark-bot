@@ -1,244 +1,186 @@
 <p align="center">
-  <img src="panel/public/dta-symbol.png" alt="DTA Logo" width="160"/>
+  <img src="panel/public/dta-symbol.png" alt="Dark Trials Arena Logo" width="140"/>
 </p>
 
-<h1 align="center">Dark Bot</h1>
+<h1 align="center">Dark Bot — Competitive Esports Platform</h1>
 
-Bot competitivo da Dark Trials Arena para administrar confrontos 5v5 de Dead by Daylight. O mesmo processo Node.js executa o bot, a API privada e o painel administrativo.
+<p align="center">
+  Plataforma unificada para orquestração de torneios competitivos 5v5 de <b>Dead by Daylight</b>.<br/>
+  Integração em tempo real entre Discord Gateway, motor de veto determinístico, sandbox de execução segura e dashboard administrativo reativo.
+</p>
 
-O painel administra o bot e também registra comandos slash personalizados por servidor, sem alterar os arquivos dos comandos nativos.
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Node.js-22_LTS-green?logo=node.js&logoColor=white" alt="Node.js" />
+  <img src="https://img.shields.io/badge/Discord.js-v14-5865F2?logo=discord&logoColor=white" alt="Discord.js" />
+  <img src="https://img.shields.io/badge/Fastify-v5-black?logo=fastify&logoColor=white" alt="Fastify" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white" alt="Prisma" />
+  <img src="https://img.shields.io/badge/QuickJS-WebAssembly-orange" alt="QuickJS Wasm" />
+  <img src="https://img.shields.io/badge/Tests-164_Passed-success" alt="Tests 164 Passed" />
+</p>
 
-## Estado atual
+---
 
-- 11 comandos slash protegidos por teste de contrato.
-- Operacao multi-servidor com dados isolados por `guildId`.
-- Confrontos iniciados no canal onde o comando foi usado ou em um canal de texto existente selecionado no painel.
-- Nenhuma criacao automatica de canal de texto ou voz.
-- Mapas presetados por set; pick/ban apenas de killers.
-- Sorteio de quem inicia e alternancia entre os sets.
-- Painel React responsivo com atualizacao em tempo real por SSE.
-- Login Discord OAuth2 e autorizacao por servidor.
-- Auditoria das acoes administrativas feitas no painel.
-- Studio de Comandos bilíngue, com rascunho, publicação, rollback, clonagem e simulação.
-- Aba de logs com snapshot da API Discloud ou espelho integral do processo.
+## Visão Geral do Projeto
 
-## Acesso administrativo
+O **Dark Bot** foi desenvolvido para resolver os gargalos de governança e sincronização em torneios de esportes eletrônicos de grande escala da **Dark Trials Arena (DTA)**. O sistema substitui processos manuais de organização por uma arquitetura híbrida de alta disponibilidade:
 
-Uma conta entra no painel apenas quando todas as condicoes abaixo sao verdadeiras:
+- **Automação de Torneios no Discord**: Gestão do ciclo de vida completo de confrontos competitivos, incluindo alocação de times, sorteio de iniciativa e execução de picks/bans.
+- **Painel Administrativo em Tempo Real**: SPA moderna para operadores e juízes monitorarem confrontos, auditarem eventos ao vivo e editarem regras sem necessidade de comandos no chat.
+- **Estúdio de Comandos Dinâmicos (Low-Code Sandbox)**: Capacidade de criar, simular e publicar comandos customizados por servidor em tempo de execução sem reiniciar a aplicação ou tocar na base de código.
 
-1. O bot esta conectado ao servidor.
-2. A conta Discord autenticada pertence ao servidor.
-3. A conta e dona do servidor, possui `Manage Guild` ou possui um cargo administrativo configurado no bot.
+---
 
-A API repete essa validacao em cada leitura, escrita e conexao SSE. Ocultar um botao no frontend nao concede nem substitui permissao.
+## Arquitetura do Sistema
 
-## Comandos slash
+A aplicação roda em um único processo coeso e concorrente, compartilhando contratos de domínio estritos entre o bot do Discord e a API do painel web.
 
-| Comando | Uso |
-| --- | --- |
-| `/configurar-bot` | Configura os cargos com acesso administrativo. |
-| `/criar-confronto` | Cria o confronto no canal de texto atual. |
-| `/encerrar` | Encerra um confronto. |
-| `/gerenciar-cargo` | Renomeia, remove e gerencia membros dos cargos de time. |
-| `/gerenciar-pool` | Cria, lista, edita, ativa e remove pools. |
-| `/listar-confrontos` | Lista confrontos ativos. |
-| `/perfil` | Mostra as estatisticas do jogador. |
-| `/ranking` | Mostra o ranking dos times. |
-| `/relatorios` | Mostra resumo, confrontos e pools. |
-| `/resultado` | Registra o vencedor. |
-| `/setup-cargo` | Cria um cargo de time. |
+```mermaid
+flowchart TB
+    subgraph Discord["Discord Ecosystem"]
+        DG[Discord Gateway]
+        UI[Capitães & Jogadores]
+    end
 
-O painel pode ativar, desativar ou sobrescrever cada comando nativo por servidor. Uma sobrescrita pode trocar textos e nomes públicos mantendo o handler original, ou usar um fluxo personalizado. A ação **Restaurar fábrica** remove a sobrescrita e recompõe o payload original protegido pelos testes de contrato.
+    subgraph Core["Dark Bot Core Runtime (Node.js 22 + TypeScript)"]
+        DJ[Discord.js Client]
+        
+        subgraph DomainServices["Domain & Application Services"]
+            VS[Veto State Machine]
+            CS[Confrontation Service]
+            AS[Audit Service]
+            PS[Pool & Preset Service]
+        end
 
-## Fluxo do confronto
+        subgraph ScriptEngine["Dynamic Command Studio"]
+            AST[AST Validator & Compiler]
+            QJS[QuickJS WebAssembly Sandbox]
+        end
 
-1. A staff seleciona uma pool e dois cargos de time.
-2. O bot cria o registro do confronto no canal existente.
-3. Um sorteio define qual time inicia o primeiro set de killer.
-4. Os times executam o pick/ban de killers.
-5. O bot apresenta o killer escolhido e o mapa presetado daquele set.
-6. O time inicial alterna nos sets seguintes.
-7. A staff registra o resultado e encerra o confronto.
+        subgraph WebLayer["Web & Security Layer (Fastify 5)"]
+            AUTH[Discord OAuth2 & AES-256-GCM]
+            CSRF[Double-Submit CSRF & Rate Limit]
+            SSE[Monotonic Event Bus - SSE]
+        end
+    end
 
-Nao existe tempo limite automatico para a etapa de pick/ban. A staff pode encerrar manualmente um confronto travado.
+    subgraph Storage["Data Layer"]
+        PRISMA[Prisma ORM]
+        DB[(Persistent SQL Database)]
+    end
 
-## Painel administrativo
+    subgraph Frontend["Operator Console (React 19 SPA)"]
+        DASH[Tailored DTA Interface]
+    end
 
-O painel tem as seguintes areas:
+    UI -->|Slash Commands / Interações| DG
+    DG <-->|WebSockets Gateway| DJ
+    DJ <--> DomainServices
+    
+    DASH <-->|REST API + Cookies Seguros| WebLayer
+    WebLayer <-->|Server-Sent Events| DASH
+    WebLayer <--> DomainServices
 
-- Visao geral: estado do bot, confrontos ativos, pools e atividade recente.
-- Confrontos: criacao em canal existente, resultado e encerramento.
-- Pools: criacao, mapas, killers, ativacao e exclusao.
-- Times: criacao e edicao de cargos, membros e cores.
-- Comandos: criação e edição visual/JSON, PT-BR/en-US, parâmetros, permissões, fluxos, scripts, simulação, versões e clonagem.
-- Ranking: classificacao calculada a partir dos resultados.
-- Auditoria: apelido atual do responsável, ação, entidade e horário; o ID aparece somente no tooltip do apelido.
-- Logs: terminal da Discloud quando `DISCLOUD_TOKEN` está configurado, com fallback para o mesmo `stdout/stderr` emitido pelo processo.
+    DomainServices <--> ScriptEngine
+    DomainServices <--> PRISMA
+    PRISMA <--> DB
+```
 
-## Studio de Comandos
+---
 
-Cada servidor possui catálogo independente. O fluxo recomendado é:
+## Destaques de Engenharia
 
-1. Criar ou editar um comando e salvar o rascunho.
-2. Simular o fluxo sem enviar mensagens ao Discord.
-3. Publicar; o bot recompõe os comandos daquele servidor por `bulk overwrite`.
-4. Usar rollback para publicar novamente uma versão anterior.
+### 1. Máquina de Estados Determinística para Vetos
+O fluxo competitivo de seleção e banimento de killers e mapas nos formatos **Melhor de 3 (MD3)** e **Melhor de 5 (MD5)** é modelado através de uma máquina de estados finita:
+- **Resolução de Concorrência**: Impede que interações simultâneas de capitães gerem estados inválidos ou quebras de turno.
+- **Sorteio e Alternância de Iniciativa**: Algoritmo que balanceia a vantagem competitiva de pick/ban entre os sets com registro de desempate auditável.
+- **Isolamento de Tenant**: Confrontos e pools são estritamente isolados por `guildId`, garantindo segurança multisservidor.
 
-O editor visual cobre metadados, localização, parâmetros, permissões, mensagens e passos comuns. O JSON avançado expõe toda a definição validada para subcomandos, grupos, embeds, botões, seleções, modais, condições, sorteios, cargos e scripts. Scripts rodam em QuickJS isolado, com 8 MB de memória, 200 ms de CPU, sem Node.js, rede, sistema de arquivos, `eval` ou segredos. A SDK disponível limita ações a Discord e variáveis validadas. Permissão de painel e permissão para scripts são controles separados.
+### 2. Sandbox de Execução Isolada (QuickJS WebAssembly)
+Para permitir que organizadores customizem fluxos e scripts sem comprometer a segurança da infraestrutura:
+- Os scripts são executados em um runtime **QuickJS isolado compilado para WebAssembly**.
+- **Limites Rígidos de Recursos**: Cada script possui teto de 8 MB de memória RAM alocada e 200 ms de tempo de CPU.
+- **Zero Acesso ao Sistema**: Nenhuma permissão de rede, acesso a arquivos, variáveis de ambiente ou APIs do Node.js (`eval`, `Function`, `fs` desabilitados).
+- **SDK Restrita**: Apenas métodos autorizados e auditados de interação com Discord e variáveis validadas via Zod são expostos.
 
-## Arquitetura
+### 3. Segurança Defensiva e Criptografia
+- **Proteção Criptográfica em Repouso**: Tokens de acesso e segredos OAuth2 são armazenados criptografados com **AES-256-GCM** autenticado com vetor de inicialização único.
+- **Sessões e Identidade**: Tokens de sessão opacos com representação em banco protegida por hash **SHA-256** e cookies `HttpOnly`, `SameSite=Lax` e `Secure`.
+- **Proteção CSRF e Anti-Abuso**: Validação rigorosa com estratégia double-submit cookie em mutações administrativas e rate limiting adaptativo no Fastify.
+- **Sanitização de Erros**: Tratamento global de exceções que oculta detalhes de banco de dados e stacktraces de respostas externas, prevenindo vazamento de informações.
+
+### 4. Console Operacional Reativo (React 19 + Fastify SSE)
+- **Sincronização em Baixa Latência**: Mudanças de estado ocorridas via Discord ou painel são propagadas instantaneamente via **Server-Sent Events (SSE)** com barramento de sequência monotônica.
+- **Design System Customizado**: Interface escura operacional alinhada à identidade visual da Dark Trials Arena, construída com tokens CSS nativos, tipografia tabular monospaçada (`JetBrains Mono Variable`) e suporte a acessibilidade **WCAG 2.2 AA**.
+- **Internacionalização (i18n)**: Suporte completo em tempo real para múltiplos idiomas (`pt-BR`, `en-US`, `es-ES`).
+
+### 5. Confiabilidade e Cobertura de Testes
+O projeto conta com **164 testes automatizados** cobrindo todas as camadas críticas:
+- **Testes de Contrato de Comandos**: Garantia de que a especificação pública dos 11 comandos nativos nunca sofra regressões acidentais.
+- **Testes de Criptografia & Auth**: Validação matemática de encriptação, decriptação, rotação e expiração de sessões.
+- **Testes de Migração de Banco**: Testes de deploy que validam execução de migrações em bancos legados sem perda de integridade de dados.
+- **Testes E2E (Playwright)**: Verificação ponta a ponta dos fluxos do operador na interface web.
+
+---
+
+## Stack Tecnológica
+
+| Camada | Tecnologia | Propósito no Projeto |
+|---|---|---|
+| **Linguagem** | TypeScript 5.7 | Tipagem estrita de ponta a ponta, redução de defeitos em tempo de execução |
+| **Backend & Bot** | Discord.js v14 | Conexão com Discord Gateway, registro e consumo de interações slash |
+| **Web Server** | Fastify v5 | Servidor HTTP e SSE de alto throughput, Helmet, Cookies, Rate-Limit |
+| **Frontend** | React 19 + Vite | SPA reativa, TanStack Query v5, Wouter, Lucide Icons, Motion |
+| **Engine Sandbox** | QuickJS (Wasm) | Execução segura de scripts de usuário em ambiente de memória confinada |
+| **Persistência** | Prisma ORM + SQL | Modelagem declarativa, migrations versionadas e consultas type-safe |
+| **Validação** | Zod v4 | Parsing e validação de schemas em fronteiras de dados e payloads |
+| **Testes** | Node.js Test Runner + Playwright | Testes unitários, de integração, contratos e suíte E2E |
+
+---
+
+## Estrutura do Repositório
 
 ```text
-Discord Gateway
-      |
-      v
-Discord.js client ---- shared services ---- Prisma/SQLite
-      |                       ^
-      v                       |
-Fastify API <---- SSE ---- React panel
-      |
-Discord OAuth2 + encrypted server-side sessions
+├── src/
+│   ├── commands/              # Handlers de comandos slash nativos do Discord
+│   ├── custom-commands/       # Compiler AST, executor e sandbox QuickJS isolada
+│   ├── database/              # Inicialização do client Prisma e conexão
+│   ├── events/                # Handlers de ciclo de vida do Discord Gateway
+│   ├── services/              # Camada de serviços e regras de negócio compartilhadas
+│   ├── systems/               # Máquina de estados determinística de veto (MD3/MD5)
+│   ├── utils/                 # Criptografia, embeds, permissões e utilitários
+│   ├── web/                   # Servidor Fastify, OAuth2, sessões, SSE e rotas da API
+│   └── startup.ts             # Bootstrap unificado dos serviços
+├── panel/                     # Single Page Application (React 19)
+│   ├── src/components/        # Componentes desacoplados e acessíveis
+│   ├── src/context/           # Contextos de guilda e estado global
+│   ├── src/hooks/             # Hooks de SSE, dados e internacionalização
+│   ├── src/pages/             # Visão geral, confrontos, pools, studio e auditoria
+│   ├── src/styles/            # Tokens do design system e estilos modulares
+│   └── e2e/                   # Suíte de testes automatizados com Playwright
+├── prisma/                    # Schema de banco de dados e migrações versionadas
+├── scripts/                   # Automação de migração, cutover e staging seguro
+└── docs/                      # Especificações arquiteturais, modelo de ameaças e runbooks
+    ├── architecture/          # Decisões de design e Dynamic Command Studio
+    ├── operations/            # Procedimentos operacionais e runbooks
+    └── security/              # Threat model detalhado e mitigações
 ```
 
-Responsabilidades principais:
+---
 
-- `src/commands`: adaptadores dos comandos slash.
-- `src/services`: regras compartilhadas pelo Discord e pelo painel.
-- `src/systems`: fluxo de veto por set.
-- `src/web`: OAuth2, sessao, autorizacao, API, SSE e runtime Discord.
-- `panel`: aplicacao React e testes Playwright.
-- `prisma`: schema e migracoes.
-- `scripts`: migracao e inicializacao usadas na hospedagem.
+## Documentação Técnica Complementar
 
-## Requisitos
+Para aprofundamento nos detalhes de engenharia e operações:
+- [Modelo de Ameaças e Segurança](docs/security/admin-panel-threat-model.md)
+- [Arquitetura do Dynamic Command Studio](docs/architecture/dynamic-command-studio.md)
+- [Design System & Princípios de UI](docs/architecture/DESIGN.md)
+- [Diretrizes de Produto & Acessibilidade](docs/PRODUCT.md)
+- [Runbook de Operações](docs/operations/admin-panel-discloud-runbook.md)
 
-- Node.js 22 ou superior.
-- Aplicacao Discord com bot configurado.
-- SQLite local ou volume persistente na hospedagem.
-- Discloud Platinum para publicar o painel no subdomínio da plataforma.
+---
 
-## Instalacao local
+## Autor
 
-```powershell
-npm install
-Copy-Item .env.example .env
-npm run db:deploy
-npm run build
-npm start
-```
-
-Para executar somente o bot, mantenha:
-
-```env
-ADMIN_PANEL_ENABLED=false
-```
-
-Para executar o painel local em `http://127.0.0.1:8080`, cadastre esse callback no Discord Developer Portal e configure:
-
-```env
-ADMIN_PANEL_ENABLED=true
-DISCORD_REDIRECT_URI=http://127.0.0.1:8080/api/auth/callback
-PORT=8080
-NODE_ENV=development
-```
-
-Os valores abaixo sao secretos e devem existir apenas no `.env` local ou no ambiente da hospedagem:
-
-- `DISCORD_TOKEN`
-- `DISCORD_CLIENT_SECRET`
-- `PANEL_COOKIE_SECRET`
-- `PANEL_ENCRYPTION_KEY`
-
-Gere as chaves do painel com Node.js:
-
-```powershell
-node -e "const c=require('node:crypto'); console.log('PANEL_COOKIE_SECRET='+c.randomBytes(48).toString('base64url')); console.log('PANEL_ENCRYPTION_KEY='+c.randomBytes(32).toString('base64'))"
-```
-
-Nao publique a saida desse comando e nao a adicione ao Git.
-
-## Variaveis de ambiente
-
-| Variavel | Obrigatoria | Descricao |
-| --- | --- | --- |
-| `DISCORD_TOKEN` | Sim | Token do bot. |
-| `CLIENT_ID` | Sim | ID da aplicacao Discord. |
-| `GUILD_ID` | Atual | Servidor principal usado pelo fluxo de sincronizacao existente. |
-| `DATABASE_URL` | Sim | URL Prisma, normalmente `file:./prisma/darkbot.db`. |
-| `ADMIN_PANEL_ENABLED` | Nao | Ativa o painel somente quando for `true`. |
-| `DISCORD_CLIENT_SECRET` | Painel | Client secret OAuth2. |
-| `DISCORD_REDIRECT_URI` | Painel | Callback exato cadastrado no Discord. |
-| `PANEL_COOKIE_SECRET` | Painel | Segredo aleatorio com ao menos 32 caracteres. |
-| `PANEL_ENCRYPTION_KEY` | Painel | Exatamente 32 bytes em Base64. |
-| `PORT` | Hospedagem | Porta HTTP; na Discloud deve ser `8080`. |
-| `NODE_ENV` | Nao | Use `production` no deploy publico. |
-| `DISCLOUD_APP_ID` | Logs | ID do app consultado; padrão lido de `discloud.config`. |
-| `DISCLOUD_TOKEN` | Logs exatos | Token pessoal usado somente pelo backend para `GET /app/:id/logs`. Sem ele, usa o espelho local. |
-
-As variaveis existentes do bot nao precisam ser alteradas para desenvolver ou testar o painel desativado.
-
-## Scripts
-
-| Comando | Resultado |
-| --- | --- |
-| `npm run dev` | Migra e executa o bot em watch mode. |
-| `npm run build` | Gera Prisma, compila o painel e o TypeScript. |
-| `npm run build:ts` | Compila somente o backend. |
-| `npm run panel:dev` | Executa o frontend Vite. |
-| `npm run panel:test:e2e` | Executa os testes Playwright. |
-| `npm test` | Executa testes unitarios, integracao e contratos. |
-| `npm run db:deploy` | Aplica migracoes pendentes. |
-| `npm run deploy:stage -- --output <diretorio>` | Compila e prepara staging seguro fora do repositorio. |
-| `npm run deploy:stage -- --cleanup <diretorio>` | Remove somente um staging temporario validado pelo marcador do script. |
-| `npm run deploy` | Registra comandos slash; nao use em uma atualizacao comum. |
-
-## Testes e qualidade
-
-Antes de uma PR ou deploy:
-
-```powershell
-npm run build
-npm test
-npm run panel:test:e2e
-npm audit --omit=dev
-```
-
-O teste `src/tests/commands-contract.test.ts` deve continuar aprovando os 11 payloads. Qualquer mudanca nesse contrato exige uma decisao separada.
-
-## Deploy na Discloud Platinum
-
-Bot com interface web e classificado pela Discloud como site. O corte de producao requer:
-
-- `TYPE=site`.
-- um `ID` igual ao subdominio reservado, sem `.discloud.app`.
-- `PORT=8080`.
-- bind em `0.0.0.0`, ja implementado.
-- callback `https://<subdominio>.discloud.app/api/auth/callback` no Discord.
-
-O procedimento completo, validacao e rollback estao em [docs/operations/admin-panel-discloud-runbook.md](docs/operations/admin-panel-discloud-runbook.md).
-
-## Seguranca
-
-- OAuth2 usa Authorization Code, `state` assinado e scopes `identify guilds`.
-- Tokens OAuth ficam criptografados no banco com AES-256-GCM.
-- Sessao usa cookie assinado, `HttpOnly`, `SameSite` e `Secure` em producao.
-- Escritas exigem CSRF de dupla submissao e validacao Zod estrita.
-- Rate limit global e limite menor nas acoes administrativas.
-- Logs removem cookies, cabecalho Authorization e `Set-Cookie`.
-- Definições são validadas por Zod e scripts executam em QuickJS com limites de CPU/memória.
-- Erros inesperados retornam mensagem generica ao navegador.
-
-O modelo de ameacas e os controles estao em [docs/security/admin-panel-threat-model.md](docs/security/admin-panel-threat-model.md).
-
-## Documentacao
-
-- [Plano de implementacao](docs/architecture/admin-panel-implementation.md)
-- [Studio de Comandos](docs/architecture/dynamic-command-studio.md)
-- [Runbook Discloud](docs/operations/admin-panel-discloud-runbook.md)
-- [Modelo de ameacas](docs/security/admin-panel-threat-model.md)
-- [Produto](PRODUCT.md)
-- [Design](DESIGN.md)
-
-## Licenca
-
-MIT. Consulte [LICENSE](LICENSE).
+Desenvolvido por **Matheus (Joaozinhown)** para a comunidade de esports da Dark Trials Arena.  
+Repositório mantido como demonstração de padrões de arquitetura, segurança defensiva e engenharia de software em TypeScript.

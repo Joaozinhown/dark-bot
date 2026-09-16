@@ -11,5 +11,8 @@ discloud/backups/
 *.db-journal
 *.db-wal
 *.db-shm
+*.zip
+*.log
+.cron-lock
 .DS_Store
 Thumbs.db
